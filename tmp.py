@@ -13,12 +13,14 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor
 from xgboost import XGBRegressor
 import matplotlib.pyplot as plt
+import seaborn as sns
 import sys
 
 # mean_squared_error(y_true, y_pred)
 
 data_train = pd.read_csv('./data/zhengqi_train.txt', sep='\t')
 data_test = pd.read_csv('./data/zhengqi_test.txt', sep='\t')
+
 
 def rmse(y_true, y_pred):
     diff = y_pred - y_true
@@ -204,53 +206,115 @@ def train_model(model, param_grid, X, y, splits=5, repeats=5):
     # plt.xlabel('z')
     # plt.title('{:.0f} samples with z>3'.format(n_outliers))
 
-    return model, cv_score, grid_results
+    return model, cv_score, grid_results, mse(y, y_pred)
 
 
 data_train = reduce_mem_usage(data_train)
+data_test = reduce_mem_usage(data_test)
+
+drop_list = ["V5", "V9", "V11", "V17", "V22", "V28",
+             ]
+data_train.drop(columns=drop_list, inplace=True)
+data_test.drop(columns=drop_list, inplace=True)
+
+
+# low_corr = ['V14', 'V21', 'V25', 'V26', 'V32', 'V33', 'V34',]
+#
+# data_train.drop(columns=low_corr, inplace=True)
+# data_test.drop(columns=low_corr, inplace=True)
+
 # scatter_matrix(data_train, figsize=(20, 16))
 
 num_pipeline = Pipeline([
     # ('Imputer', Imputer("median")),
     ('StandardScaler', StandardScaler()),
 ])
+def std_fun(data):
+    data_std = num_pipeline.fit_transform(data)
+    data_std = pd.DataFrame(data_std, index=data.index,
+                                  columns=data.columns)
+    return data_std
 
-data_train_std = num_pipeline.fit_transform(data_train)
-data_train_std = pd.DataFrame(data_train_std, index=data_train.index,
-                              columns=data_train.columns)
+
+# data_train = std_fun(data_train)
+# data_test = std_fun(data_test)
+
+
+# for x in data_test.columns:
+#     g = sns.kdeplot(data_train[x], color="Red", shade=True)
+#     g = sns.kdeplot(data_test[x], ax=g, color="Blue", shade=True)
+#     g.set_xlabel(x)
+#     g.set_ylabel("Frequency")
+#     g = g.legend(["train", "test"])
+#     plt.show()
+
 # savfig_send()
 
 # data_train.iloc[:, :10].hist(bins=50, figsize=[20, 15])
-linear_regression = LinearRegression()
-X = data_train_std.iloc[:, :-1]
-y = data_train_std['target']
+# linear_regression = LinearRegression().score()
+# X = data_train.iloc[:, :-1]
+# y = data_train['target']
 # linear_model = linear_regression.fit(X, y)
 
 # outliers = find_outliers(Ridge(), X, y)
 
-model, cv_score, grid_results = train_model(LinearRegression(), {}, X=X, y=y, splits=5, repeats=5)
+# model, cv_score, grid_results = train_model(LinearRegression(), {}, X=X, y=y, splits=5, repeats=5)
 
 # places to store optimal models and scores
-opt_models = dict()
-score_models = pd.DataFrame(columns=['mean','std'])
+# opt_models = dict()
+# score_models = pd.DataFrame(columns=['mean','std'])
 
-# no. k-fold splits
-splits=5
-# no. k-fold iterations
-repeats=5
+# # no. k-fold splits
+# splits=5
+# # no. k-fold iterations
+# repeats=5
+#
+# model = 'XGB'
+# opt_models[model] = XGBRegressor()
+#
+# param_grid = {'n_estimators':[100,200,300,400,500],
+#               'max_depth':[1,2,3],
+#              }
+#
+# opt_models[model], cv_score,grid_results = train_model(opt_models[model], param_grid=param_grid, X=X, y=y,
+#                                               splits=splits, repeats=1)
+#
+# cv_score.name = model
+# score_models = score_models.append(cv_score)
+#
+# y_test = opt_models['XGB'].predict(data_test)
+# pd.Series(y_test).to_csv('./y_test.txt', index=False, header=False)
+# X.iloc[:, :10].hist(bins=50, figsize=[20, 10])
+# plt.ion()
+# plt.show()
+# plt.plotting()
+# model_dict = {}
+# for fun in [
+#     LinearRegression,
+#     # Lasso, ElasticNet, LinearSVR, SVR,
+#     # RandomForestRegressor,
+#     # GradientBoostingRegressor, AdaBoostRegressor,
+#     # XGBRegressor,
+#     Ridge,
+# ]:
+#     print('______________________')
+#     fun_name = fun.__name__
+#     print(fun_name)
+#     model = fun()
+#     # model = LinearRegression()
+#     model, cv_score, grid_results, model_mse = train_model(model, {}, X, y, splits=5, repeats=5)
+#     model_dict[fun_name] = [model, model_mse]
 
-model = 'XGB'
-opt_models[model] = XGBRegressor()
+# for model_name in model_dict.keys():
+#     # model_name = 'Ridge'
+#     model, model_mse = model_dict[model_name]
+#     print(model_mse)
+#     pd.Series(model.predict(data_test)).to_csv(f'./y_test_{model_name}.txt', index=False, header=False)
 
-param_grid = {'n_estimators':[100,200,300,400,500],
-              'max_depth':[1,2,3],
-             }
-
-opt_models[model], cv_score,grid_results = train_model(opt_models[model], param_grid=param_grid, X=X, y=y,
-                                              splits=splits, repeats=1)
-
-cv_score.name = model
-score_models = score_models.append(cv_score)
-
-y_test = opt_models['XGB'].predict(data_test)
-pd.Series(y_test).to_csv('./y_test.txt', index=False, header=False)
+a = pd.read_csv('./y_test_haha.txt', index_col=None, header=None)
+X = data_train.iloc[:, :-1]
+y = data_train['target']
+model = Ridge()
+model.fit(X, y)
+print(mse(y, model.predict(X)))
+print(mse(a, model.predict(data_test)))
