@@ -11,7 +11,14 @@ from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
 from sklearn.svm import LinearSVR, SVR
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor
-from xgboost import XGBRegressor
+from xgboost import XGBRegressor, XGBClassifier
+import xgboost as xgb
+import lightgbm as lgb
+lgb.train()
+
+xgb.train()
+gbm = XGBClassifier()
+gbm.set_params()
 import matplotlib.pyplot as plt
 import seaborn as sns
 import sys
