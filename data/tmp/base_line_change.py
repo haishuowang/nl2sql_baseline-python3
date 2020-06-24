@@ -57,6 +57,7 @@ imp['feat'] = used_feat
 
 params = {
     'learning_rate': 0.1,
+    'num_iterations':20,
     'metric': 'multi_error',
     'objective': 'multiclass',
     'num_class': 19,
@@ -65,8 +66,8 @@ params = {
     'bagging_freq': 2,
     'n_jobs': 4,
     'seed': 2020,
-    'max_depth': 10,
-    'num_leaves': 64,
+    'max_depth': 4,
+    'num_leaves': 10,
     'lambda_l1': 0.5,
     'lambda_l2': 0.5,
     'verbose' : -1
@@ -76,6 +77,7 @@ oof_train = np.zeros((len(train_x), 19))
 preds = np.zeros((len(test_x), 19))
 folds = 5
 seeds = [44]  # , 2020, 527, 1527]
+seeds = [66]
 for seed in seeds:
     kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
