@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import warnings
+warnings.filterwarnings('ignore')
 import lightgbm as lgb
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
@@ -67,6 +69,7 @@ params = {
     'num_leaves': 64,
     'lambda_l1': 0.5,
     'lambda_l2': 0.5,
+    'verbose' : -1
 }
 
 oof_train = np.zeros((len(train_x), 19))
