@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
+
 warnings.filterwarnings('ignore')
 import lightgbm as lgb
 from sklearn.model_selection import StratifiedKFold
@@ -26,9 +27,14 @@ data_test['fragment_id'] += 10000
 label = 'behavior_id'
 data = pd.concat([data_train, data_test], sort=False)
 df = data.drop_duplicates(subset=['fragment_id']).reset_index(drop=True)[['fragment_id', 'behavior_id']]
+data['acc_xc'] = data['acc_xg'] - data['acc_x']
+data['acc_yc'] = data['acc_yg'] - data['acc_y']
+data['acc_zc'] = data['acc_zg'] - data['acc_z']
+data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
+
 data['acc'] = (data['acc_x'] ** 2 + data['acc_y'] ** 2 + data['acc_z'] ** 2) ** 0.5
 data['accg'] = (data['acc_xg'] ** 2 + data['acc_yg'] ** 2 + data['acc_zg'] ** 2) ** 0.5
-for f in tqdm([f for f in data.columns if 'acc' in f]):
+for f in tqdm([f for f in data.columns if 'acc' in ['acc_x', 'acc_xg', 'acc_y', 'acc_yg', 'acc_z', 'acc_zg']]):
     for stat in ['min', 'max', 'mean', 'median', 'std', 'skew']:
         df[f + '_' + stat] = data.groupby('fragment_id')[f].agg(stat).values
 
@@ -57,7 +63,7 @@ imp['feat'] = used_feat
 
 params = {
     'learning_rate': 0.1,
-    'num_iterations':20,
+    'num_iterations': 100,
     'metric': 'multi_error',
     'objective': 'multiclass',
     'num_class': 19,
@@ -65,12 +71,12 @@ params = {
     'bagging_fraction': 0.75,
     'bagging_freq': 2,
     'n_jobs': 4,
-    'seed': 2020,
-    'max_depth': 4,
-    'num_leaves': 10,
+    # 'seed': 2020,
+    'max_depth': 10,
+    'num_leaves': 64,
     'lambda_l1': 0.5,
     'lambda_l2': 0.5,
-    'verbose' : -1
+    'verbose': -1
 }
 
 oof_train = np.zeros((len(train_x), 19))
@@ -125,9 +131,9 @@ def acc_combo(y, y_pred):
 
 labels = np.argmax(preds, axis=1)
 oof_y = np.argmax(oof_train, axis=1)
-round(accuracy_score(train_y, oof_y), 5)
+print(round(accuracy_score(train_y, oof_y), 5))
 score = sum(acc_combo(y_true, y_pred) for y_true, y_pred in zip(train_y, oof_y)) / oof_y.shape[0]
-round(score, 5)
+print(round(score, 5))
 sub = pd.read_csv('提交结果示例.csv')
 
 sub['behavior_id'] = labels
@@ -140,4 +146,4 @@ sns.barplot(vc.index, vc.values)
 plt.show()
 from datetime import datetime
 
-sub.to_csv(f'{datetime.now().strftime("%Y%m%d_%T")}_sub{round(score,5)}.csv', index=False)
+sub.to_csv(f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_sub{round(score, 5)}.csv', index=False)

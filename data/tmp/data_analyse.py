@@ -50,14 +50,21 @@ def acc_combo(y, y_pred):
 def add_feature(data):
     data['acc'] = (data['acc_x'] ** 2 + data['acc_y'] ** 2 + data['acc_z'] ** 2) ** 0.5
     data['accg'] = (data['acc_xg'] ** 2 + data['acc_yg'] ** 2 + data['acc_zg'] ** 2) ** 0.5
+
+    data['acc_xc'] = data['acc_xg'] - data['acc_x']
+    data['acc_yc'] = data['acc_yg'] - data['acc_y']
+    data['acc_zc'] = data['acc_zg'] - data['acc_z']
+    data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
     return data
 
 
 data_train = pd.read_csv('sensor_train.csv')
 data_test = pd.read_csv('sensor_test.csv')
 
+add_feature(data_train)
+add_feature(data_test)
 # data_train.drop_duplicates(subset=)
-data_all = pd.concat([data_train, data_test])
+data_all = pd.concat([data_train, data_test], sort=False)
 
 
 def deal_out_data(column, data_train, data_test, sigma=3):
@@ -67,15 +74,50 @@ def deal_out_data(column, data_train, data_test, sigma=3):
     data_train
 
 
+# for label, part_df in data_train.groupby(by='behavior_id'):
+#     part_df = part_df.sort_values(by='time_point')
+#     plt.figure(figsize=[20, 10])
+#     plt.title='behavior_id'
+#     print('____________________________________________')
+#     for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc',
+#                              'acc_xg', 'acc_yg', 'acc_zg', 'accg',
+#                              'acc_xc', 'acc_yc', 'acc_zc', 'G'
+#                                ]):
+#         print(i, col, sep='   ')
+#         print(part_df[col].describe(), sep='   ')
+#
+#         ax = plt.subplot(3, 4, i+1)
+#         plt.plot(part_df['time_point'].values, part_df[col].values)
+#     # plt.show()
+#     plt.savefig(f'behavior_id {label}.png')
+#     plt.close()
+
 for label, part_df in data_train.groupby(by='behavior_id'):
     part_df = part_df.sort_values(by='time_point')
-    plt.figure(figsize=[12, 6])
-    plt.title='behavior_id'
-    for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc_xg', 'acc_yg', 'acc_zg']):
-        ax = plt.subplot(2, 3, i+1)
-        plt.plot(part_df['time_point'].values, part_df[col].values)
-    # plt.show()
-    plt.savefig(f'behavior_id {label}.png')
+    a = 0
+    for fragment_id, fragment_id_df in part_df.groupby(by='fragment_id'):
+        plt.figure(figsize=[20, 10])
+        plt.suptitle = label
+        print('____________________________________________')
+        for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc',
+                                 'acc_xg', 'acc_yg', 'acc_zg', 'accg',
+                                 'acc_xc', 'acc_yc', 'acc_zc', 'G'
+                                   ]):
+            # print(i, col, sep='   ')
+            # print(fragment_id_df[col].describe(), sep='   ')
+
+            ax = plt.subplot(3, 4, i+1)
+            ax.plot(fragment_id_df['time_point'].values, fragment_id_df[col].values)
+        # plt.show()
+        a += 1
+        plt.savefig(f'behavior_id {label}_{a}.png')
+        plt.close()
+        if a >= 5:
+            print(' B R E A K')
+            break
+        # plt.savefig(f'behavior_id {label}.png')
+        # plt.close()
+
 # for x in data_test.columns:
 #     g = sns.kdeplot(data_train[x], color="Red", shade=True)
 #     g = sns.kdeplot(data_test[x], ax=g, color="Blue", shade=True)
