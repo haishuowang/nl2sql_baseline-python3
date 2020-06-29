@@ -4,7 +4,8 @@ import warnings
 
 warnings.filterwarnings('ignore')
 import lightgbm as lgb
-from sklearn.model_selection import StratifiedKFold
+import xgboost as xgb
+from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder
 import seaborn as sns
@@ -12,6 +13,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import entropy
 import gc
 import os
+from scipy import signal
 from tqdm import tqdm
 
 pd.set_option('display.max_columns', 600)
@@ -19,38 +21,82 @@ pd.set_option('display.max_rows', 600)
 from IPython.core.interactiveshell import InteractiveShell
 
 InteractiveShell.ast_node_interactivity = "all"
-data_path = 'E:/contest/2020创青春交子杯/'
+
 data_train = pd.read_csv('sensor_train.csv')
 data_test = pd.read_csv('sensor_test.csv')
 
-data_test['fragment_id'] += 10000
+
+def get_data():
+    data_test['fragment_id'] += 10000
+
+    data = pd.concat([data_train, data_test], sort=False)
+    df = data.drop_duplicates(subset=['fragment_id']).reset_index(drop=True)[['fragment_id', 'behavior_id']]
+
+    # data['acc_x_diff'] = data['acc_x'].diff()
+    # data['acc_y_diff'] = data['acc_y'].diff()
+    # data['acc_z_diff'] = data['acc_z'].diff()
+
+    data['acc_xc'] = data['acc_xg'] - data['acc_x']
+    data['acc_yc'] = data['acc_yg'] - data['acc_y']
+    data['acc_zc'] = data['acc_zg'] - data['acc_z']
+    data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
+
+    data['acc_xc_diff'] = data['acc_xc'].diff()
+    data['acc_yc_diff'] = data['acc_yc'].diff()
+    data['acc_zc_diff'] = data['acc_zc'].diff()
+
+    data['acc'] = (data['acc_x'] ** 2 + data['acc_y'] ** 2 + data['acc_z'] ** 2) ** 0.5
+    data['accg'] = (data['acc_xg'] ** 2 + data['acc_yg'] ** 2 + data['acc_zg'] ** 2) ** 0.5
+    for f in tqdm([f for f in data.columns if f in ['acc_x', 'acc_y', 'acc_z', 'acc',
+                                                    'acc_xg', 'acc_yg', 'acc_zg', 'accg',
+                                                    'acc_xc', 'acc_yc', 'acc_zc', 'G',
+                                                    # 'acc_x_diff', 'acc_y_diff', 'acc_z_diff',
+                                                    # 'acc_xc_diff', 'acc_yc_diff', 'acc_zc_diff',
+
+                                                    ]]):
+        # for stat in ['min', 'max', 'mean', 'median', 'std', 'skew']:
+        for stat in ['min', 'max', 'mean', 'median', 'std']:
+            df[f + '_' + stat] = data.groupby('fragment_id')[f].agg(stat).values
+
+        df[f + '_' + 'qtl_05'] = data.groupby('fragment_id')[f].quantile(0.05)
+        df[f + '_' + 'qtl_95'] = data.groupby('fragment_id')[f].quantile(0.95)
+
+        df[f + '_' + 'qtl_20'] = data.groupby('fragment_id')[f].quantile(0.20)
+        df[f + '_' + 'qtl_80'] = data.groupby('fragment_id')[f].quantile(0.80)
+
+        # df[f + '_' + 'max_min'] = df[f + '_' + 'max'] - df[f + '_' + 'min']
+        # df[f + '_' + 'max_mean'] = df[f + '_' + 'max'] - df[f + '_' + 'mean']
+        # df[f + '_' + 'mean_min'] = df[f + '_' + 'mean'] - df[f + '_' + 'min']
+
+        def fun(x):
+            x = x.rolling(window=5).mean()
+            return len(signal.find_peaks(x, distance=3)[0])
+
+        df[f + '_' + 'peaks_num'] = data.groupby('fragment_id')[f].apply(fun)
+
+    return df
+
+
 label = 'behavior_id'
-data = pd.concat([data_train, data_test], sort=False)
-df = data.drop_duplicates(subset=['fragment_id']).reset_index(drop=True)[['fragment_id', 'behavior_id']]
-data['acc_xc'] = data['acc_xg'] - data['acc_x']
-data['acc_yc'] = data['acc_yg'] - data['acc_y']
-data['acc_zc'] = data['acc_zg'] - data['acc_z']
-data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
+df = get_data()
 
-data['acc'] = (data['acc_x'] ** 2 + data['acc_y'] ** 2 + data['acc_z'] ** 2) ** 0.5
-data['accg'] = (data['acc_xg'] ** 2 + data['acc_yg'] ** 2 + data['acc_zg'] ** 2) ** 0.5
-for f in tqdm([f for f in data.columns if 'acc' in ['acc_x', 'acc_xg', 'acc_y', 'acc_yg', 'acc_z', 'acc_zg']]):
-    for stat in ['min', 'max', 'mean', 'median', 'std', 'skew']:
-        df[f + '_' + stat] = data.groupby('fragment_id')[f].agg(stat).values
 
-    df[f + '_' + 'qtl_05'] = data.groupby('fragment_id')[f].quantile(0.05)
-    df[f + '_' + 'qtl_95'] = data.groupby('fragment_id')[f].quantile(0.95)
 
-    df[f + '_' + 'qtl_20'] = data.groupby('fragment_id')[f].quantile(0.20)
-    df[f + '_' + 'qtl_80'] = data.groupby('fragment_id')[f].quantile(0.80)
 
-    df[f + '_' + 'max_min'] = df[f + '_' + 'max'] - df[f + '_' + 'min']
-
-train_df = df[df[label].isna() == False].reset_index(drop=True)
-test_df = df[df[label].isna() == True].reset_index(drop=True)
+train_df = df[df[label].notna()].reset_index(drop=True)
+test_df = df[df[label].isna()].reset_index(drop=True)
 
 drop_feat = []
-used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
+# used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
+used_feat = ['acc_xg_peaks_num', 'acc_xg_qtl_80', 'acc_zc_min', 'acc_y_qtl_05', 'G_std', 'acc_zg_qtl_05',
+             'acc_yg_qtl_95', 'acc_xg_qtl_95', 'acc_xg_mean', 'acc_x_peaks_num', 'acc_y_qtl_80', 'acc_xg_std',
+             'acc_xg_min', 'acc_x_std', 'accg_mean', 'accg_qtl_05', 'acc_y_qtl_20', 'G_min', 'acc_yc_std',
+             'acc_z_mean', 'acc_xg_qtl_05', 'G_qtl_95', 'G_max', 'acc_zg_min', 'acc_yc_min', 'acc_median', 'G_qtl_20',
+             'acc_xg_qtl_20', 'G_median', 'acc_xc_std', 'G_mean', 'acc_yg_qtl_20', 'accg_qtl_80', 'G_qtl_05',
+             'acc_mean', 'acc_zc_qtl_05', 'acc_zg_qtl_20', 'acc_xc_qtl_80', 'accg_qtl_20', 'G_qtl_80', 'acc_yg_max',
+             'acc_yg_std', 'accg_median', 'acc_y_std', 'acc_y_peaks_num', 'acc_zg_mean', 'acc_yg_qtl_80', 'acc_xc_min',
+             'acc_qtl_20', 'acc_x_mean', 'acc_qtl_05', 'acc_yg_qtl_05', 'acc_y_mean', 'acc_yg_min', 'acc_xg_max',
+             'acc_zg_std', 'acc_yc_max', 'acc_zc_std', 'acc_yc_qtl_95', 'acc_yg_mean']
 print(len(used_feat))
 print(used_feat)
 
@@ -63,7 +109,7 @@ imp['feat'] = used_feat
 
 params = {
     'learning_rate': 0.1,
-    'num_iterations': 100,
+    'num_iterations': 20,
     'metric': 'multi_error',
     'objective': 'multiclass',
     'num_class': 19,
@@ -71,7 +117,7 @@ params = {
     'bagging_fraction': 0.75,
     'bagging_freq': 2,
     'n_jobs': 4,
-    # 'seed': 2020,
+    'seed': 2020,
     'max_depth': 10,
     'num_leaves': 64,
     'lambda_l1': 0.5,
@@ -81,9 +127,9 @@ params = {
 
 oof_train = np.zeros((len(train_x), 19))
 preds = np.zeros((len(test_x), 19))
-folds = 5
-seeds = [44]  # , 2020, 527, 1527]
-seeds = [66]
+folds = 4
+# seeds = [44]  # , 2020, 527, 1527]
+seeds = [2020]
 for seed in seeds:
     kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
@@ -94,7 +140,7 @@ for seed in seeds:
 
         model = lgb.train(params, train_set, num_boost_round=500000,
                           valid_sets=(train_set, val_set), early_stopping_rounds=50,
-                          verbose_eval=20)
+                          verbose_eval=50)
         oof_train[val_idx] += model.predict(x_val) / len(seeds)
         preds += model.predict(test_x) / folds / len(seeds)
         scores.append(model.best_score['valid_1']['multi_error'])
@@ -105,10 +151,14 @@ for seed in seeds:
 imp['gain'] = imp[[f for f in imp.columns if 'gain' in f]].sum(axis=1) / folds
 imp['split'] = imp[[f for f in imp.columns if 'split' in f]].sum(axis=1)
 imp = imp.sort_values(by=['gain'], ascending=False)
-imp[['feat', 'gain', 'split']]
+print(imp[['feat', 'gain', 'split']])
 imp = imp.sort_values(by=['split'], ascending=False)
-imp[['feat', 'gain', 'split']]
+print(imp[['feat', 'gain', 'split']])
 
+
+# a = set(imp[['feat', 'gain', 'split']].sort_values(by=['gain'], ascending=False).iloc[:50]['feat'])
+# b = set(imp[['feat', 'gain', 'split']].sort_values(by=['split'], ascending=False).iloc[:50]['feat'])
+# len(list(a | b))
 
 def acc_combo(y, y_pred):
     # 数值ID与行为编码的对应关系
@@ -138,12 +188,22 @@ sub = pd.read_csv('提交结果示例.csv')
 
 sub['behavior_id'] = labels
 
-vc = data_train['behavior_id'].value_counts().sort_index()
-sns.barplot(vc.index, vc.values)
-plt.show()
+# plt.figure(figsize=[10, 8])
+# vc = data_train['behavior_id'].value_counts().sort_index()
+# sns.barplot(vc.index, vc.values)
+# plt.show()
+plt.figure(figsize=[10, 8])
 vc = sub['behavior_id'].value_counts().sort_index()
 sns.barplot(vc.index, vc.values)
 plt.show()
 from datetime import datetime
 
 sub.to_csv(f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_sub{round(score, 5)}.csv', index=False)
+
+# train_set = xgb.Dataset()
+# from xgboost.sklearn import XGBClassifier
+
+# model = XGBClassifier(n_estimators=20, learning_rate=0.1, num_class=19, max_depth=6,
+#                       reg_lambda=0.5, reg_alpha=0.5, gamma=0.1, seed=2020,
+#                       objective='multi:softmax', colsample_bytree=0.8, subsample=0.8, eval_metric='merror')
+# model.fit(X_train, y_train, eval_set=[(x_test, y_test)], verbose=False, early_stopping_rounds=50)
