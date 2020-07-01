@@ -14,9 +14,9 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, A
 from xgboost import XGBRegressor, XGBClassifier
 import xgboost as xgb
 import lightgbm as lgb
-lgb.train()
-
-xgb.train()
+# lgb.train()
+#
+# xgb.train()
 gbm = XGBClassifier()
 gbm.set_params()
 import matplotlib.pyplot as plt

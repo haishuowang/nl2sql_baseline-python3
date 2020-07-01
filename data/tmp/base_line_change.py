@@ -58,11 +58,11 @@ def get_data():
         for stat in ['min', 'max', 'mean', 'median', 'std']:
             df[f + '_' + stat] = data.groupby('fragment_id')[f].agg(stat).values
 
-        df[f + '_' + 'qtl_05'] = data.groupby('fragment_id')[f].quantile(0.05)
-        df[f + '_' + 'qtl_95'] = data.groupby('fragment_id')[f].quantile(0.95)
+        df[f + '_' + 'qtl_05'] = data.groupby('fragment_id')[f].quantile(0.05).values
+        df[f + '_' + 'qtl_95'] = data.groupby('fragment_id')[f].quantile(0.95).values
 
-        df[f + '_' + 'qtl_20'] = data.groupby('fragment_id')[f].quantile(0.20)
-        df[f + '_' + 'qtl_80'] = data.groupby('fragment_id')[f].quantile(0.80)
+        df[f + '_' + 'qtl_20'] = data.groupby('fragment_id')[f].quantile(0.20).values
+        df[f + '_' + 'qtl_80'] = data.groupby('fragment_id')[f].quantile(0.80).values
 
         # df[f + '_' + 'max_min'] = df[f + '_' + 'max'] - df[f + '_' + 'min']
         # df[f + '_' + 'max_mean'] = df[f + '_' + 'max'] - df[f + '_' + 'mean']
@@ -72,7 +72,7 @@ def get_data():
             x = x.rolling(window=5).mean()
             return len(signal.find_peaks(x, distance=3)[0])
 
-        df[f + '_' + 'peaks_num'] = data.groupby('fragment_id')[f].apply(fun)
+        df[f + '_' + 'peaks_num'] = data.groupby('fragment_id')[f].apply(fun).values
 
     return df
 
@@ -87,19 +87,20 @@ train_df = df[df[label].notna()].reset_index(drop=True)
 test_df = df[df[label].isna()].reset_index(drop=True)
 
 drop_feat = []
-# used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
-used_feat = ['acc_xg_peaks_num', 'acc_xg_qtl_80', 'acc_zc_min', 'acc_y_qtl_05', 'G_std', 'acc_zg_qtl_05',
-             'acc_yg_qtl_95', 'acc_xg_qtl_95', 'acc_xg_mean', 'acc_x_peaks_num', 'acc_y_qtl_80', 'acc_xg_std',
-             'acc_xg_min', 'acc_x_std', 'accg_mean', 'accg_qtl_05', 'acc_y_qtl_20', 'G_min', 'acc_yc_std',
-             'acc_z_mean', 'acc_xg_qtl_05', 'G_qtl_95', 'G_max', 'acc_zg_min', 'acc_yc_min', 'acc_median', 'G_qtl_20',
-             'acc_xg_qtl_20', 'G_median', 'acc_xc_std', 'G_mean', 'acc_yg_qtl_20', 'accg_qtl_80', 'G_qtl_05',
-             'acc_mean', 'acc_zc_qtl_05', 'acc_zg_qtl_20', 'acc_xc_qtl_80', 'accg_qtl_20', 'G_qtl_80', 'acc_yg_max',
-             'acc_yg_std', 'accg_median', 'acc_y_std', 'acc_y_peaks_num', 'acc_zg_mean', 'acc_yg_qtl_80', 'acc_xc_min',
-             'acc_qtl_20', 'acc_x_mean', 'acc_qtl_05', 'acc_yg_qtl_05', 'acc_y_mean', 'acc_yg_min', 'acc_xg_max',
-             'acc_zg_std', 'acc_yc_max', 'acc_zc_std', 'acc_yc_qtl_95', 'acc_yg_mean']
+used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
+# used_feat = ['acc_xg_peaks_num', 'acc_xg_qtl_80', 'acc_zc_min', 'acc_y_qtl_05', 'G_std', 'acc_zg_qtl_05',
+#              'acc_yg_qtl_95', 'acc_xg_qtl_95', 'acc_xg_mean', 'acc_x_peaks_num', 'acc_y_qtl_80', 'acc_xg_std',
+#              'acc_xg_min', 'acc_x_std', 'accg_mean', 'accg_qtl_05', 'acc_y_qtl_20', 'G_min', 'acc_yc_std',
+#              'acc_z_mean', 'acc_xg_qtl_05', 'G_qtl_95', 'G_max', 'acc_zg_min', 'acc_yc_min', 'acc_median', 'G_qtl_20',
+#              'acc_xg_qtl_20', 'G_median', 'acc_xc_std', 'G_mean', 'acc_yg_qtl_20', 'accg_qtl_80', 'G_qtl_05',
+#              'acc_mean', 'acc_zc_qtl_05', 'acc_zg_qtl_20', 'acc_xc_qtl_80', 'accg_qtl_20', 'G_qtl_80', 'acc_yg_max',
+#              'acc_yg_std', 'accg_median', 'acc_y_std', 'acc_y_peaks_num', 'acc_zg_mean', 'acc_yg_qtl_80', 'acc_xc_min',
+#              'acc_qtl_20', 'acc_x_mean', 'acc_qtl_05', 'acc_yg_qtl_05', 'acc_y_mean', 'acc_yg_min', 'acc_xg_max',
+#              'acc_zg_std', 'acc_yc_max', 'acc_zc_std', 'acc_yc_qtl_95', 'acc_yg_mean']
 print(len(used_feat))
 print(used_feat)
-
+drop_feat = []
+used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
 train_x = train_df[used_feat]
 train_y = train_df[label]
 test_x = test_df[used_feat]
@@ -109,7 +110,7 @@ imp['feat'] = used_feat
 
 params = {
     'learning_rate': 0.1,
-    'num_iterations': 20,
+    'num_iterations': 100,
     'metric': 'multi_error',
     'objective': 'multiclass',
     'num_class': 19,

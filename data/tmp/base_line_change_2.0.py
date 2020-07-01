@@ -5,9 +5,10 @@ import warnings
 warnings.filterwarnings('ignore')
 import lightgbm as lgb
 import xgboost as xgb
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split, GridSearchCV
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import entropy
@@ -15,6 +16,7 @@ import gc
 import os
 from scipy import signal
 from tqdm import tqdm
+
 
 pd.set_option('display.max_columns', 600)
 pd.set_option('display.max_rows', 600)
@@ -58,11 +60,11 @@ def get_data():
         for stat in ['min', 'max', 'mean', 'median', 'std']:
             df[f + '_' + stat] = data.groupby('fragment_id')[f].agg(stat).values
 
-        df[f + '_' + 'qtl_05'] = data.groupby('fragment_id')[f].quantile(0.05)
-        df[f + '_' + 'qtl_95'] = data.groupby('fragment_id')[f].quantile(0.95)
+        df[f + '_' + 'qtl_05'] = data.groupby('fragment_id')[f].quantile(0.05).values
+        df[f + '_' + 'qtl_95'] = data.groupby('fragment_id')[f].quantile(0.95).values
 
-        df[f + '_' + 'qtl_20'] = data.groupby('fragment_id')[f].quantile(0.20)
-        df[f + '_' + 'qtl_80'] = data.groupby('fragment_id')[f].quantile(0.80)
+        df[f + '_' + 'qtl_20'] = data.groupby('fragment_id')[f].quantile(0.20).values
+        df[f + '_' + 'qtl_80'] = data.groupby('fragment_id')[f].quantile(0.80).values
 
         # df[f + '_' + 'max_min'] = df[f + '_' + 'max'] - df[f + '_' + 'min']
         # df[f + '_' + 'max_mean'] = df[f + '_' + 'max'] - df[f + '_' + 'mean']
@@ -72,7 +74,7 @@ def get_data():
             x = x.rolling(window=5).mean()
             return len(signal.find_peaks(x, distance=3)[0])
 
-        df[f + '_' + 'peaks_num'] = data.groupby('fragment_id')[f].apply(fun)
+        df[f + '_' + 'peaks_num'] = data.groupby('fragment_id')[f].apply(fun).values
 
     return df
 
@@ -104,6 +106,8 @@ scores = []
 imp = pd.DataFrame()
 imp['feat'] = used_feat
 
+#################################################################################################################
+# lightboost
 # params = {
 #     'learning_rate': 0.1,
 #     'num_iterations': 20,
@@ -157,23 +161,6 @@ imp['feat'] = used_feat
 # b = set(imp[['feat', 'gain', 'split']].sort_values(by=['split'], ascending=False).iloc[:50]['feat'])
 # len(list(a | b))
 
-def acc_combo(y, y_pred):
-    # 数值ID与行为编码的对应关系
-    mapping = {0: 'A_0', 1: 'A_1', 2: 'A_2', 3: 'A_3',
-               4: 'D_4', 5: 'A_5', 6: 'B_1', 7: 'B_5',
-               8: 'B_2', 9: 'B_3', 10: 'B_0', 11: 'A_6',
-               12: 'C_1', 13: 'C_3', 14: 'C_0', 15: 'B_6',
-               16: 'C_2', 17: 'C_5', 18: 'C_6'}
-    # 将行为ID转为编码
-    code_y, code_y_pred = mapping[y], mapping[y_pred]
-    if code_y == code_y_pred:  # 编码完全相同得分1.0
-        return 1.0
-    elif code_y.split("_")[0] == code_y_pred.split("_")[0]:  # 编码仅字母部分相同得分1.0/7
-        return 1.0 / 7
-    elif code_y.split("_")[1] == code_y_pred.split("_")[1]:  # 编码仅数字部分相同得分1.0/3
-        return 1.0 / 3
-    else:
-        return 0.0
 
 
 # labels = np.argmax(preds, axis=1)
@@ -205,10 +192,24 @@ def acc_combo(y, y_pred):
 #                       objective='multi:softmax', colsample_bytree=0.8, subsample=0.8, eval_metric='merror')
 # model.fit(X_train, y_train, eval_set=[(x_test, y_test)], verbose=False, early_stopping_rounds=50)
 
+#################################################################################################################
+# xgboost
+# parameters = {
+#     'max_depth': [5, 10, 15, 20, 25],
+#     'learning_rate': [0.01, 0.02, 0.05, 0.1, 0.15],
+#     'n_estimators': [500, 1000, 2000, 3000, 5000],
+#     'min_child_weight': [0, 2, 5, 10, 20],
+#     'max_delta_step': [0, 0.2, 0.6, 1, 2],
+#     'subsample': [0.6, 0.7, 0.8, 0.85, 0.95],
+#     'colsample_bytree': [0.5, 0.6, 0.7, 0.8, 0.9],
+#     'reg_alpha': [0, 0.25, 0.5, 0.75, 1],
+#     'reg_lambda': [0.2, 0.4, 0.6, 0.8, 1],
+#     'scale_pos_weight': [0.2, 0.4, 0.6, 0.8, 1]
+# }
 
 parameters = {
     'max_depth': [5, 10, 15, 20, 25],
-    'learning_rate': [0.01, 0.02, 0.05, 0.1, 0.15],
+    'learning_rate': [0.01, 0.1, ],
     'n_estimators': [500, 1000, 2000, 3000, 5000],
     'min_child_weight': [0, 2, 5, 10, 20],
     'max_delta_step': [0, 0.2, 0.6, 1, 2],
@@ -216,36 +217,45 @@ parameters = {
     'colsample_bytree': [0.5, 0.6, 0.7, 0.8, 0.9],
     'reg_alpha': [0, 0.25, 0.5, 0.75, 1],
     'reg_lambda': [0.2, 0.4, 0.6, 0.8, 1],
-    'scale_pos_weight': [0.2, 0.4, 0.6, 0.8, 1]
+    # 'scale_pos_weight': [0.2, 0.4, 0.6, 0.8, 1]
 }
 
 model = xgb.XGBClassifier(max_depth=10,
-                        learning_rate=0.01,
-                        n_estimators=20,
-                        silent=True,
-                        objective='multi:softprob',
-                        nthread=4,
-                        gamma=0,
-                        min_child_weight=1,
-                        max_delta_step=0,
-                        subsample=0.85,
-                        colsample_bytree=0.7,
-                        colsample_bylevel=1,
-                        reg_alpha=0.5,
-                        reg_lambda=0.5,
-                        scale_pos_weight=1,
-                        seed=2020,
-                        missing=None,
-                        eval_metric='merror')
+                          learning_rate=0.01,
+                          num_class=19,
+                          n_estimators=100,
+                          objective='multi:softprob',
+                          nthread=4,
+                          gamma=0,
+                          min_child_weight=1,
+                          max_delta_step=0,
+                          subsample=0.85,
+                          colsample_bytree=0.7,
+                          colsample_bylevel=1,
+                          reg_alpha=0.5,
+                          reg_lambda=0.5,
+                          # scale_pos_weight=1,
+                          seed=2020,
+                          missing=None,
+                          eval_metric='merror')
 oof_train = np.zeros((len(train_x), 19))
 preds = np.zeros((len(test_x), 19))
 folds = 4
-# seeds = [44]  # , 2020, 527, 1527]
+# # seeds = [44]  # , 2020, 527, 1527]
 seeds = [2020]
 for seed in seeds:
     kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
         x_trn, y_trn, x_val, y_val = train_x.iloc[trn_idx], train_y.iloc[trn_idx], train_x.iloc[val_idx], \
                                      train_y.iloc[val_idx]
-        model.fit(x_trn, y_trn,eval_set=[(x_val, y_val)],verbose=-1)
-        oof_train[val_idx] += model.predict(x_val) / len(seeds)
+        model.fit(x_trn, y_trn, eval_set=[(x_val, y_val)], verbose=-1)
+        oof_train[val_idx] += model.predict_proba(x_val) / len(seeds)
+
+# kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=2020)
+# gsearch = GridSearchCV(model, parameters, cv=kfold, verbose=1, return_train_score=True, n_jobs=3)
+# gsearch.fit(train_x, train_y)
+#################################################################################################################
+
+
+
+#################################################################################################################
