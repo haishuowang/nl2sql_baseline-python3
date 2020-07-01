@@ -129,5 +129,6 @@ res_df = pd.DataFrame(res_list)
 res_sr = res_df.apply(lambda x: x.value_counts().idxmax())
 sub = pd.Series(res_sr.values, index=test_df['fragment_id'] - 10000)
 
+pred_y = pred_y.sort_index()
 score = sum(acc_combo(y_true, y_pred) for y_true, y_pred in zip(train_y, pred_y)) / len(pred_y)
-# sub.to_csv(f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_sub{round(score, 5)}.csv', index=False)
+sub.to_csv(f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_sub{round(score, 5)}.csv', index=False)
