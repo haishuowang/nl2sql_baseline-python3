@@ -164,8 +164,8 @@ def train_cls_model(model, param_grid, X, y, splits=5, repeats=5):
     return model, cv_score, grid_results, mean_squared_error(y, y_pred)
 
 
-def train(model, folds, train_x, train_y, test_x):
-    def part_train(trn_idx, val_idx):
+def train(model, folds, train_x, train_y, test_x, info_return=False):
+    def part_train(trn_idx, val_idx, fold):
         x_trn, y_trn, x_val, y_val = train_x.iloc[trn_idx], train_y.iloc[trn_idx], train_x.iloc[val_idx], \
                                      train_y.iloc[val_idx]
         # model.fit(x_trn, y_trn, eval_set=[(x_val, y_val)], verbose=-1)
@@ -175,17 +175,26 @@ def train(model, folds, train_x, train_y, test_x):
         print('train score:', accuracy_score(y_trn, y_trn_pred))
         print('test score:', accuracy_score(y_val, y_val_pred))
         res = model.predict(test_x)
+        if info_return:
+            model.importance_type = 'split'
+            info_df[f'split_{fold}'] = model.feature_importances_
+            model.importance_type = 'gain'
+            info_df[f'gain_{fold}'] = model.feature_importances_
         return res, pd.Series(y_val_pred, index=val_idx)
 
     seeds = [2020]
     res_list = []
     pred_y_list = []
+    info_df = pd.DataFrame(index=train_x.columns)
     for seed in seeds:
         kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
         for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
             print('_______________________________')
-            res, y_val_pred = part_train(trn_idx, val_idx)
+            res, y_val_pred = part_train(trn_idx, val_idx, fold)
             res_list.append(res)
             pred_y_list.append(y_val_pred)
     pred_y = pd.concat(pred_y_list, axis=0)
-    return res_list, pred_y
+    if info_return:
+        info_df['split'] = info_df[[x for x in info_df.columns if 'split' in x]].sum(1)
+        info_df['gain'] = info_df[[x for x in info_df.columns if 'gain' in x]].sum(1)
+    return res_list, pred_y, info_df
