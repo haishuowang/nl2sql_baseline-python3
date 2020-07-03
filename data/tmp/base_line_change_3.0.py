@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import warnings
 import sys
+
 sys.path.append('/home/haishuowang/PycharmProjects/nl2sql_baseline-python3')
 warnings.filterwarnings('ignore')
 from sklearn.model_selection import StratifiedKFold, train_test_split, GridSearchCV
@@ -187,16 +188,22 @@ used_feat = [f for f in train_df.columns
                  'mean',
                  'median',
                  'std',
+                 # '95_05',
+                 # '80_20',
+                 # 'qtl_05',
+                 # 'qtl_95',
+                 # 'qtl_20',
+                 # 'qtl_80',
                  # 'out_num',
                  # 'max_min',
                  # 'peaks_num',
              ]
-             ]
+             ] + ['acc_yg|qtl_05', 'acc_yg|qtl_95', 'acc_xg|qtl_05', 'acc_xg|qtl_95']
 # used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
-# used_feat = ['acc|median', 'acc_z|mean', 'acc|std', 'acc_xc|mean', 'acc_yc|mean', 'acc_zc|mean', 'G|mean', 'acc_x|std',
-#              'delta_xz|mean', 'accg|median', 'acc_zg|mean', 'acc_y|mean', 'accg|mean', 'G|median', 'acc_x|mean',
-#              'acc_z|std', 'acc_y|std', 'acc_xg|std', 'acc_yg|std', 'acc_yg|mean', 'acc_zc|std', 'G|std', 'acc_yc|std',
-#              'acc_xg|mean', 'acc_yg|median']
+# used_feat = ['G|mean', 'acc_xg|qtl_05', 'acc_xg|qtl_95', 'acc_yg|qtl_95', 'acc_yg|mean', 'G|std',
+#              'acc_z|mean', 'acc_y|std', 'acc_x|mean', 'acc|median', 'acc_x|std', 'acc|std', 'acc_zc|std', 'accg|median',
+#              'G|median', 'acc_yg|qtl_05', 'acc_yc|std', 'acc_zg|mean', 'acc_y|mean', 'acc_yg|std', 'acc_xg|std',
+#              'accg|mean', 'acc_xg|mean']
 print(len(used_feat))
 print(used_feat)
 
@@ -251,26 +258,30 @@ model_name = 'LGBMClassifier'
 #                 for lambda_l2 in lambda_l2_list:
 #                     for num_iterations in num_iterations_list:
 #                         for max_depth, num_leaves in max_depth_num_leaves_list:
-learning_rate = 0.01
-feature_fraction = 0.5
-bagging_fraction = 0.5
-lambda_l1 = 0.5
-lambda_l2 = 0.5
-num_iterations = 150
-max_depth = 12
-num_leaves = 128
-model = classifier_dict[model_name](metric='multi_error', objective='multiclass', seed=2020,
-                                    n_jobs=4,
-                                    learning_rate=learning_rate,
-                                    feature_fraction=feature_fraction,
-                                    bagging_fraction=bagging_fraction,
-                                    lambda_l1=lambda_l1,
-                                    lambda_l2=lambda_l2,
-                                    num_iterations=num_iterations,
-                                    max_depth=max_depth,
-                                    num_leaves=num_leaves,
-                                    )
-res_list, pred_y, info_df = train(model, folds, train_x, train_y, test_x, info_return=False)
+
+# learning_rate = 0.01
+# feature_fraction = 0.5
+# bagging_fraction = 0.5
+# lambda_l1 = 0.5
+# lambda_l2 = 0.5
+# num_iterations = 150
+# max_depth = 12
+# num_leaves = 128
+# model = classifier_dict[model_name](metric='multi_error', objective='multiclass', seed=2020,
+#                                     n_jobs=4,
+#                                     learning_rate=learning_rate,
+#                                     feature_fraction=feature_fraction,
+#                                     bagging_fraction=bagging_fraction,
+#                                     lambda_l1=lambda_l1,
+#                                     lambda_l2=lambda_l2,
+#                                     num_iterations=num_iterations,
+#                                     max_depth=max_depth,
+#                                     num_leaves=num_leaves,
+#                                     )
+model = classifier_dict[model_name](metric='multi_error', objective='multiclass', learning_rate=0.1,
+                                    lambda_l1=0.5, lambda_l2=0.5, max_depth=10, num_leaves=128)
+# model = classifier_dict[model_name](metric='multi_error', objective='multiclass')
+res_list, pred_y, info_df = train(model, folds, train_x, train_y, test_x, info_return=True)
 
 res_df = pd.DataFrame(res_list)
 res_sr = res_df.apply(lambda x: x.value_counts().idxmax())
@@ -282,8 +293,8 @@ score = sum(acc_combo(y_true, y_pred) for y_true, y_pred in zip(train_y, pred_y)
     pred_y)
 print('*****')
 print(model_name)
-print(feature_fraction, bagging_fraction, lambda_l1, lambda_l2, num_iterations, max_depth,
-      num_leaves)
+# print(feature_fraction, bagging_fraction, lambda_l1, lambda_l2, num_iterations, max_depth,
+#       num_leaves)
 print(score)
 print('*****')
 # res_all_list.append(
