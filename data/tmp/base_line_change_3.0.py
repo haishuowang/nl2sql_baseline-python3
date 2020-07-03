@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import os
 import warnings
-
+import sys
+sys.path.append('/home/haishuowang/PycharmProjects/nl2sql_baseline-python3')
 warnings.filterwarnings('ignore')
 from sklearn.model_selection import StratifiedKFold, train_test_split, GridSearchCV
 from sklearn.ensemble import VotingClassifier, StackingClassifier
@@ -41,7 +42,10 @@ def acc_combo(y, y_pred):
         return 0.0
 
 
-def get_data(run_new=False):
+def get_data(run_new=False, add=False):
+    if add:
+        pass
+
     if not os.path.exists('tmp.csv') or run_new:
         df = data.drop_duplicates(subset=['fragment_id']).reset_index(drop=True)[['fragment_id', 'behavior_id']]
 
@@ -69,8 +73,8 @@ def get_data(run_new=False):
             'acc_xg', 'acc_yg', 'acc_zg', 'accg',
             'acc_xc', 'acc_yc', 'acc_zc', 'G',
             'delta_xy', 'delta_xz', 'delta_yz',
-            # 'acc_x_diff', 'acc_y_diff', 'acc_z_diff',
-            # 'acc_xc_diff', 'acc_yc_diff', 'acc_zc_diff',
+            'acc_x_diff', 'acc_y_diff', 'acc_z_diff',
+            'acc_xc_diff', 'acc_yc_diff', 'acc_zc_diff',
         ]]):
             for stat in ['min', 'max', 'mean', 'median', 'std', 'skew']:
                 # for stat in ['min', 'max', 'mean', 'median', 'std']:
@@ -89,10 +93,22 @@ def get_data(run_new=False):
             df[f + '|' + 'max_mean'] = df[f + '|' + 'max'] - df[f + '|' + 'mean']
             df[f + '|' + 'mean_min'] = df[f + '|' + 'mean'] - df[f + '|' + 'min']
 
+            df[f + '|' + 'max_median'] = df[f + '|' + 'max'] - df[f + '|' + 'median']
+            df[f + '|' + 'median_min'] = df[f + '|' + 'median'] - df[f + '|' + 'min']
+
             def fun(x):
                 x = x.rolling(window=5).mean()
                 return len(signal.find_peaks(x, distance=3)[0])
 
+            def fun_2(x):
+                sigma = 3
+                std = x.std()
+                mean = x.mean()
+                upper = mean + sigma * std
+                lower = mean - sigma * std
+                return len(x[(x > upper) & (x < lower)])
+
+            df[f + '|' + 'out_num'] = data.groupby('fragment_id')[f].apply(fun_2).values
             df[f + '|' + 'peaks_num'] = data.groupby('fragment_id')[f].apply(fun).values
         df.to_csv('tmp.csv')
     else:
@@ -102,7 +118,7 @@ def get_data(run_new=False):
 
 label = 'behavior_id'
 df = get_data()
-
+df['move_range'] = (df['acc_xc|max_min'] + df['acc_yc|max_min'] + df['acc_zc|max_min'])
 train_df = df[df[label].notna()].reset_index(drop=True)
 test_df = df[df[label].isna()].reset_index(drop=True)
 
@@ -145,15 +161,42 @@ drop_feat = []
 #              'G|qtl_05',
 #              'acc_y|mean',
 #              'acc_zc|qtl_05']
+# used_feat = [f for f in train_df.columns
+#              if f.split('|')[0] in [
+#                  'acc_x', 'acc_y', 'acc_z', 'acc',
+#                  'acc_xg', 'acc_yg', 'acc_zg', 'accg',
+#                  'acc_xc', 'acc_yc', 'acc_zc', 'G',
+#                  'delta_xy', 'delta_xz', 'delta_yz',
+#              ] and f.split('|')[1] in [
+#                  'min', 'max',
+#                  'mean',
+#                  'median',
+#                  'std',
+#                  # 'max_min',
+#                  # 'peaks_num',
+#              ]
+#              ]
 used_feat = [f for f in train_df.columns
              if f.split('|')[0] in [
                  'acc_x', 'acc_y', 'acc_z', 'acc',
                  'acc_xg', 'acc_yg', 'acc_zg', 'accg',
                  'acc_xc', 'acc_yc', 'acc_zc', 'G',
                  'delta_xy', 'delta_xz', 'delta_yz',
+             ] and f.split('|')[1] in [
+                 # 'min', 'max',
+                 'mean',
+                 'median',
+                 'std',
+                 # 'out_num',
+                 # 'max_min',
+                 # 'peaks_num',
              ]
              ]
 # used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
+# used_feat = ['acc|median', 'acc_z|mean', 'acc|std', 'acc_xc|mean', 'acc_yc|mean', 'acc_zc|mean', 'G|mean', 'acc_x|std',
+#              'delta_xz|mean', 'accg|median', 'acc_zg|mean', 'acc_y|mean', 'accg|mean', 'G|median', 'acc_x|mean',
+#              'acc_z|std', 'acc_y|std', 'acc_xg|std', 'acc_yg|std', 'acc_yg|mean', 'acc_zc|std', 'G|std', 'acc_yc|std',
+#              'acc_xg|mean', 'acc_yg|median']
 print(len(used_feat))
 print(used_feat)
 
@@ -174,26 +217,88 @@ seed = 2020
 #                          # voting='soft'
 #                          )
 
-# model = classifier_dict['RandomForestClassifier']()
+params = {
+    'learning_rate': 0.1,
+    'num_iterations': 20,
+    'metric': 'multi_error',
+    'objective': 'multiclass',
+    'num_class': 19,
+    'feature_fraction': 0.80,
+    'bagging_fraction': 0.75,
+    'bagging_freq': 2,
+    'n_jobs': 4,
+    'seed': 2020,
+    'max_depth': 10,
+    'num_leaves': 64,
+    'lambda_l1': 0.5,
+    'lambda_l2': 0.5,
+    'verbose': -1
+}
 
-model = classifier_dict['LGBMClassifier'](metric='multi_error', objective='multiclass', )
-# model = classifier_dict['LGBMClassifier'](metric='multi_error', objective=f1_loss, )
-res_list, pred_y, info_df = train(model, folds, train_x, train_y, test_x, info_return=True)
+model_name = 'LGBMClassifier'
+# learning_rate_list = [0.01, 0.02, 0.05, 0.1, 0.2]
+# num_iterations_list = [50, 100, 150, 200]
+# feature_fraction_list = [0.5, 0.7, 0.9]
+# bagging_fraction_list = [0.5, 0.7, 0.9]
+# lambda_l1_list = [0, 0.5, 1]
+# lambda_l2_list = [0, 0.5, 1]
+# max_depth_num_leaves_list = [[4, 8], [6, 16], [8, 32], [10, 64], [12, 128]]
+# res_all_list = []
+# for learning_rate in learning_rate_list:
+#     for feature_fraction in feature_fraction_list:
+#         for bagging_fraction in bagging_fraction_list:
+#             for lambda_l1 in lambda_l1_list:
+#                 for lambda_l2 in lambda_l2_list:
+#                     for num_iterations in num_iterations_list:
+#                         for max_depth, num_leaves in max_depth_num_leaves_list:
+learning_rate = 0.01
+feature_fraction = 0.5
+bagging_fraction = 0.5
+lambda_l1 = 0.5
+lambda_l2 = 0.5
+num_iterations = 150
+max_depth = 12
+num_leaves = 128
+model = classifier_dict[model_name](metric='multi_error', objective='multiclass', seed=2020,
+                                    n_jobs=4,
+                                    learning_rate=learning_rate,
+                                    feature_fraction=feature_fraction,
+                                    bagging_fraction=bagging_fraction,
+                                    lambda_l1=lambda_l1,
+                                    lambda_l2=lambda_l2,
+                                    num_iterations=num_iterations,
+                                    max_depth=max_depth,
+                                    num_leaves=num_leaves,
+                                    )
+res_list, pred_y, info_df = train(model, folds, train_x, train_y, test_x, info_return=False)
 
 res_df = pd.DataFrame(res_list)
 res_sr = res_df.apply(lambda x: x.value_counts().idxmax())
-sub = pd.DataFrame([(test_df['fragment_id'] - 10000).values, res_sr.values], index=['fragment_id', 'behavior_id']).T
+sub = pd.DataFrame([(test_df['fragment_id'] - 10000).values, res_sr.values],
+                   index=['fragment_id', 'behavior_id']).T
 
 pred_y = pred_y.sort_index()
-score = sum(acc_combo(y_true, y_pred) for y_true, y_pred in zip(train_y, pred_y)) / len(pred_y)
+score = sum(acc_combo(y_true, y_pred) for y_true, y_pred in zip(train_y, pred_y)) / len(
+    pred_y)
+print('*****')
+print(model_name)
+print(feature_fraction, bagging_fraction, lambda_l1, lambda_l2, num_iterations, max_depth,
+      num_leaves)
 print(score)
-sub.to_csv(f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_sub{round(score, 5)}.csv', index=False)
+print('*****')
+# res_all_list.append(
+#     [feature_fraction, bagging_fraction, lambda_l1, lambda_l2, num_iterations,
+#      max_depth, num_leaves, score])
+# res_all_df = pd.DataFrame(res_all_list)
+# res_all_df.to_csv('res_all_df.csv')
+# sub.to_csv(f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_sub{round(score, 5)}.csv', index=False)
 
-n = 20
-gain_list = info_df['gain'].sort_values(ascending=False).iloc[:n].index
-split_list = info_df['split'].sort_values(ascending=False).iloc[:n].index
-use_list = list(set(gain_list) | set(split_list))
-print(len(use_list))
-a = set(use_list) & set(used_feat)
+# n = 20
+# gain_list = info_df['gain'].sort_values(ascending=False).iloc[:n].index
+# split_list = info_df['split'].sort_values(ascending=False).iloc[:n].index
+# use_list = list(set(gain_list) | set(split_list))
+# print(use_list)
+# print(len(use_list))
+# a = set(use_list) & set(used_feat)
 # print(len(set(use_list) - set(used_feat)))
 # print(len(set(used_feat) - set(use_list)))

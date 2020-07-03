@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import time
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV, RepeatedKFold, cross_val_score, \
@@ -165,6 +166,7 @@ def train_cls_model(model, param_grid, X, y, splits=5, repeats=5):
 
 
 def train(model, folds, train_x, train_y, test_x, info_return=False):
+    a = time.time()
     def part_train(trn_idx, val_idx, fold):
         x_trn, y_trn, x_val, y_val = train_x.iloc[trn_idx], train_y.iloc[trn_idx], train_x.iloc[val_idx], \
                                      train_y.iloc[val_idx]
@@ -197,4 +199,6 @@ def train(model, folds, train_x, train_y, test_x, info_return=False):
     if info_return:
         info_df['split'] = info_df[[x for x in info_df.columns if 'split' in x]].sum(1)
         info_df['gain'] = info_df[[x for x in info_df.columns if 'gain' in x]].sum(1)
+    b = time.time()
+    print(f'time cose:{b-a}')
     return res_list, pred_y, info_df

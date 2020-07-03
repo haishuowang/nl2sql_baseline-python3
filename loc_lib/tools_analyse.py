@@ -4,13 +4,17 @@ from pandas.plotting import scatter_matrix
 
 def kdeplot(data_test, data_train, save_path='.'):
     for x in data_test.columns:
-        g = sns.kdeplot(data_train[x], color="Red", shade=True)
-        g = sns.kdeplot(data_test[x], ax=g, color="Blue", shade=True)
-        g.set_xlabel(x)
-        g.set_ylabel("Frequency")
-        g.legend(["train", "test"])
-        # plt.show()
-        plt.savefig(f'{save_path}/{x}.png')
+        try:
+            g = sns.kdeplot(data_train[x], color="Red", shade=True)
+            g = sns.kdeplot(data_test[x], ax=g, color="Blue", shade=True)
+            g.set_xlabel(x)
+            g.set_ylabel("Frequency")
+            g.legend(["train", "test"])
+            # plt.show()
+            plt.savefig(f'{save_path}/{x}.png')
+        except Exception as error:
+            print(x)
+            print(error)
         plt.close()
 
 def scatter_matrix_plot(data_train):
