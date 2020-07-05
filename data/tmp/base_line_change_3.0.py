@@ -177,33 +177,33 @@ drop_feat = []
 #                  # 'peaks_num',
 #              ]
 #              ]
-used_feat = [f for f in train_df.columns
-             if f.split('|')[0] in [
-                 'acc_x', 'acc_y', 'acc_z', 'acc',
-                 'acc_xg', 'acc_yg', 'acc_zg', 'accg',
-                 'acc_xc', 'acc_yc', 'acc_zc', 'G',
-                 'delta_xy', 'delta_xz', 'delta_yz',
-             ] and f.split('|')[1] in [
-                 # 'min', 'max',
-                 'mean',
-                 'median',
-                 'std',
-                 # '95_05',
-                 # '80_20',
-                 # 'qtl_05',
-                 # 'qtl_95',
-                 # 'qtl_20',
-                 # 'qtl_80',
-                 # 'out_num',
-                 # 'max_min',
-                 # 'peaks_num',
-             ]
-             ] + ['acc_yg|qtl_05', 'acc_yg|qtl_95', 'acc_xg|qtl_05', 'acc_xg|qtl_95']
+# used_feat = [f for f in train_df.columns
+#              if f.split('|')[0] in [
+#                  'acc_x', 'acc_y', 'acc_z', 'acc',
+#                  'acc_xg', 'acc_yg', 'acc_zg', 'accg',
+#                  'acc_xc', 'acc_yc', 'acc_zc', 'G',
+#                  'delta_xy', 'delta_xz', 'delta_yz',
+#              ] and f.split('|')[1] in [
+#                  # 'min', 'max',
+#                  'mean',
+#                  'median',
+#                  'std',
+#                  # '95_05',
+#                  # '80_20',
+#                  # 'qtl_05',
+#                  # 'qtl_95',
+#                  # 'qtl_20',
+#                  # 'qtl_80',
+#                  # 'out_num',
+#                  # 'max_min',
+#                  # 'peaks_num',
+#              ]
+#              ] + ['acc_yg|qtl_05', 'acc_yg|qtl_95', 'acc_xg|qtl_05', 'acc_xg|qtl_95']
 # used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
-# used_feat = ['G|mean', 'acc_xg|qtl_05', 'acc_xg|qtl_95', 'acc_yg|qtl_95', 'acc_yg|mean', 'G|std',
-#              'acc_z|mean', 'acc_y|std', 'acc_x|mean', 'acc|median', 'acc_x|std', 'acc|std', 'acc_zc|std', 'accg|median',
-#              'G|median', 'acc_yg|qtl_05', 'acc_yc|std', 'acc_zg|mean', 'acc_y|mean', 'acc_yg|std', 'acc_xg|std',
-#              'accg|mean', 'acc_xg|mean']
+used_feat = ['G|mean', 'acc_xg|qtl_05', 'acc_xg|qtl_95', 'acc_yg|qtl_95', 'acc_yg|mean', 'G|std',
+             'acc_z|mean', 'acc_y|std', 'acc_x|mean', 'acc|median', 'acc_x|std', 'acc|std', 'acc_zc|std', 'accg|median',
+             'G|median', 'acc_yg|qtl_05', 'acc_yc|std', 'acc_zg|mean', 'acc_y|mean', 'acc_yg|std', 'acc_xg|std',
+             'accg|mean', 'acc_xg|mean']
 print(len(used_feat))
 print(used_feat)
 
@@ -278,9 +278,9 @@ model_name = 'LGBMClassifier'
 #                                     max_depth=max_depth,
 #                                     num_leaves=num_leaves,
 #                                     )
-model = classifier_dict[model_name](metric='multi_error', objective='multiclass', learning_rate=0.1,
-                                    lambda_l1=0.5, lambda_l2=0.5, max_depth=10, num_leaves=128)
-# model = classifier_dict[model_name](metric='multi_error', objective='multiclass')
+# model = classifier_dict[model_name](metric='multi_error', objective='multiclass', learning_rate=0.1,
+#                                     lambda_l1=0.5, lambda_l2=0.5, max_depth=10, num_leaves=128)
+model = classifier_dict[model_name](metric='multi_error', objective='multiclass')
 res_list, pred_y, info_df = train(model, folds, train_x, train_y, test_x, info_return=True)
 
 res_df = pd.DataFrame(res_list)
