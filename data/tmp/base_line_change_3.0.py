@@ -77,9 +77,13 @@ def get_data(run_new=False, add=False):
             # for stat in ['min', 'max', 'mean', 'median', 'std', 'skew']:
             #     # for stat in ['min', 'max', 'mean', 'median', 'std']:
             #     df[f + '|' + stat] = data.groupby('fragment_id')[f].agg(stat).values
+            def fun(x):
+                x = x.rolling(window=5).mean()
+                return len(signal.find_peaks(x, distance=5)[0])
+            df[f + '|' + 'peaks_num'] = data.groupby('fragment_id')[f].apply(fun).values
 
-            df[f + '|' + 'qtl_02'] = data.groupby('fragment_id')[f].quantile(0.02).values
-            df[f + '|' + 'qtl_98'] = data.groupby('fragment_id')[f].quantile(0.98).values
+            # df[f + '|' + 'qtl_02'] = data.groupby('fragment_id')[f].quantile(0.02).values
+            # df[f + '|' + 'qtl_98'] = data.groupby('fragment_id')[f].quantile(0.98).values
             # df[f + '|' + 'power_rate'] = data.groupby('fragment_id')[f].apply(lambda x: (x.abs() > 0.1).sum() / len(x))
             # df[f + '|' + '95_05'] = df[f + '|' + 'qtl_95'] - df[f + '|' + 'qtl_05']
             # df[f + '|' + '80_20'] = df[f + '|' + 'qtl_80'] - df[f + '|' + 'qtl_20']
@@ -240,7 +244,7 @@ used_feat = [f for f in train_df.columns
              ]] + ['acc_yg|qtl_05', 'acc_yg|qtl_95', 'acc_xg|qtl_05', 'acc_xg|qtl_95'] + [
                 f for f in train_df.columns
                 if f.split('|')[0] in ['acc_x', 'acc_y', 'acc_z', 'acc'] and f.split('|')[1] in [
-        'min', 'max'
+        'power_rate'
     ]
             ]
 
@@ -325,9 +329,9 @@ model_name = 'LGBMClassifier'
 #                                     max_depth=max_depth,
 #                                     num_leaves=num_leaves,
 #                                     )
-# model = classifier_dict[model_name](metric='multi_error', objective='multiclass', learning_rate=0.1,
-#                                     lambda_l1=0.5, lambda_l2=0.5, max_depth=10, num_leaves=128)
-model = classifier_dict[model_name](metric='multi_error', objective='multiclass')
+model = classifier_dict[model_name](metric='multi_error', objective='multiclass', learning_rate=0.05,
+                                    lambda_l1=0.5, lambda_l2=0.5, max_depth=10, num_leaves=128)
+# model = classifier_dict[model_name](metric='multi_error', objective='multiclass')
 res_list, pred_y, info_df = train(model, folds, train_x, train_y, test_x, info_return=True)
 
 res_df = pd.DataFrame(res_list)
