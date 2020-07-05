@@ -384,6 +384,7 @@ a = pd.concat(res_list, axis=1)
 # cor_df = pd.DataFrame(tmp_list)
 # cor_df = cor_df.sort_values(1, ascending=False)
 
+
 # res_all_list.append(
 #     [feature_fraction, bagging_fraction, lambda_l1, lambda_l2, num_iterations,
 #      max_depth, num_leaves, score])
