@@ -65,8 +65,6 @@ def add_feature(data):
     data['acc_yc_diff'] = data['acc_yc'].diff()
     data['acc_zc_diff'] = data['acc_zc'].diff()
     data['g_diff'] = data['G'].diff()
-
-
     return data
 
 
@@ -86,23 +84,23 @@ def deal_out_data(column, data_train, data_test, sigma=3):
     data_train
 
 
-# for label, part_df in data_train.groupby(by='behavior_id'):
-#     part_df = part_df.sort_values(by='time_point')
-#     plt.figure(figsize=[20, 10])
-#     plt.title='behavior_id'
-#     print('____________________________________________')
-#     for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc',
-#                              'acc_xg', 'acc_yg', 'acc_zg', 'accg',
-#                              'acc_xc', 'acc_yc', 'acc_zc', 'G'
-#                                ]):
-#         print(i, col, sep='   ')
-#         print(part_df[col].describe(), sep='   ')
-#
-#         ax = plt.subplot(3, 4, i+1)
-#         plt.plot(part_df['time_point'].values, part_df[col].values)
-#     # plt.show()
-#     plt.savefig(f'behavior_id {label}.png')
-#     plt.close()
+for label, part_df in data_train.groupby(by='behavior_id'):
+    part_df = part_df.sort_values(by='time_point')
+    plt.figure(figsize=[20, 10])
+    plt.title='behavior_id'
+    print('____________________________________________')
+    for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc',
+                             'acc_xg', 'acc_yg', 'acc_zg', 'accg',
+                             'acc_xc', 'acc_yc', 'acc_zc', 'G'
+                               ]):
+        print(i, col, sep='   ')
+        print(part_df[col].describe(), sep='   ')
+
+        ax = plt.subplot(3, 4, i+1)
+        plt.plot(part_df['time_point'].values, part_df[col].values)
+    # plt.show()
+    plt.savefig(f'behavior_id {label}.png')
+    plt.close()
 
 # for label, part_df in data_train.groupby(by='behavior_id'):
 #     part_df = part_df.sort_values(by='time_point')
@@ -139,33 +137,33 @@ def deal_out_data(column, data_train, data_test, sigma=3):
 #     g = g.legend(["train", "test"])
 #     plt.show()
 
-fragment_id_df = data_train[data_train['fragment_id']==6664]
-plt.figure(figsize=[20, 10])
-print('____________________________________________')
-for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc',
-                         'acc_xg', 'acc_yg', 'acc_zg', 'accg',
-                         'acc_xc', 'acc_yc', 'acc_zc', 'G',
-                         'acc_x_diff', 'acc_y_diff', 'acc_z_diff', 'acc_diff',
-                         'acc_xc_diff', 'acc_yc_diff', 'acc_zc_diff', 'g_diff',
-                           ]):
-    # print(i, col, sep='   ')
-    # print(fragment_id_df[col].describe(), sep='   ')
-
-    ax = plt.subplot(5, 4, i+1)
-    ax.plot(fragment_id_df['time_point'].values, fragment_id_df[col].rolling(window=5).mean().values)
-plt.show()
-
-
-from scipy import signal
-fragment_id_df = data_train[data_train['fragment_id']==6664]
-print('____________________________________________')
-for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc',
-                         'acc_xg', 'acc_yg', 'acc_zg', 'accg',
-                         'acc_xc', 'acc_yc', 'acc_zc', 'G',
-                         'acc_x_diff', 'acc_y_diff', 'acc_z_diff', 'acc_diff',
-                         'acc_xc_diff', 'acc_yc_diff', 'acc_zc_diff', 'g_diff',
-                           ]):
-    print(i, col)
-    a = fragment_id_df[col].rolling(window=5).mean().values
-    a = fragment_id_df[col].values
-    print(signal.find_peaks(a, distance=3))
+# fragment_id_df = data_train[data_train['fragment_id']==6664]
+# plt.figure(figsize=[20, 10])
+# print('____________________________________________')
+# for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc',
+#                          'acc_xg', 'acc_yg', 'acc_zg', 'accg',
+#                          'acc_xc', 'acc_yc', 'acc_zc', 'G',
+#                          'acc_x_diff', 'acc_y_diff', 'acc_z_diff', 'acc_diff',
+#                          'acc_xc_diff', 'acc_yc_diff', 'acc_zc_diff', 'g_diff',
+#                            ]):
+#     # print(i, col, sep='   ')
+#     # print(fragment_id_df[col].describe(), sep='   ')
+#
+#     ax = plt.subplot(5, 4, i+1)
+#     ax.plot(fragment_id_df['time_point'].values, fragment_id_df[col].rolling(window=5).mean().values)
+# plt.show()
+#
+#
+# from scipy import signal
+# fragment_id_df = data_train[data_train['fragment_id']==6664]
+# print('____________________________________________')
+# for i, col in enumerate(['acc_x', 'acc_y', 'acc_z', 'acc',
+#                          'acc_xg', 'acc_yg', 'acc_zg', 'accg',
+#                          'acc_xc', 'acc_yc', 'acc_zc', 'G',
+#                          'acc_x_diff', 'acc_y_diff', 'acc_z_diff', 'acc_diff',
+#                          'acc_xc_diff', 'acc_yc_diff', 'acc_zc_diff', 'g_diff',
+#                            ]):
+#     print(i, col)
+#     a = fragment_id_df[col].rolling(window=5).mean().values
+#     a = fragment_id_df[col].values
+#     print(signal.find_peaks(a, distance=3))

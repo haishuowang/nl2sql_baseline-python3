@@ -102,6 +102,7 @@ def get_data(run_new=False, add=False):
 
             df[f + '|' + '95_05'] = df[f + '|' + 'qtl_95'] - df[f + '|' + 'qtl_05'].values
             df[f + '|' + '80_20'] = df[f + '|' + 'qtl_80'] - df[f + '|' + 'qtl_20'].values
+            df[f + '|' + '98_02'] = df[f + '|' + 'qtl_95'] - df[f + '|' + 'qtl_05'].values
         df.to_csv('tmp.csv')
         return df
 
@@ -176,7 +177,7 @@ def get_data(run_new=False, add=False):
 
 
 label = 'behavior_id'
-df = get_data()
+df = get_data(add=True)
 # df = get_data()
 df['move_range'] = (df['acc_xc|max_min'] + df['acc_yc|max_min'] + df['acc_zc|max_min'])
 train_df = df[df[label].notna()].reset_index(drop=True)
