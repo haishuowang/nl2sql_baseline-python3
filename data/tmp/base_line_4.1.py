@@ -53,15 +53,20 @@ def Net():
                activation='relu',
                padding='same')(X)
 
-    X = MaxPooling2D()(X)
-    X = Dropout(0.2)(X)
     X = Conv2D(filters=256,
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(X)
 
-    X = Dropout(0.3)(X)
+    X = MaxPooling2D()(X)
+    X = Dropout(0.2)(X)
     X = Conv2D(filters=512,
+               kernel_size=(3, 3),
+               activation='relu',
+               padding='same')(X)
+
+    X = Dropout(0.3)(X)
+    X = Conv2D(filters=1024,
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(X)
@@ -74,35 +79,36 @@ def Net():
 
 kfold = StratifiedKFold(5, random_state=2020, shuffle=True)
 
-# proba_t = np.zeros((7500, 19))
-# for fold, (xx, yy) in enumerate(kfold.split(x, y)):
-#     y_ = to_categorical(y, num_classes=19)
-#     model = Net()
-#     model.compile(loss='categorical_crossentropy',
-#                   optimizer=Adam(),
-#                   metrics=['acc'])
-#     plateau = ReduceLROnPlateau(monitor="val_acc",
-#                                 verbose=1,
-#                                 mode='max',
-#                                 factor=0.5,
-#                                 patience=8)
-#     early_stopping = EarlyStopping(monitor='val_acc',
-#                                    verbose=0,
-#                                    mode='max',
-#                                    patience=18)
-#     checkpoint = ModelCheckpoint(f'fold{fold}.h5',
-#                                  monitor='val_acc',
-#                                  verbose=0,
-#                                  mode='max',
-#                                  save_best_only=True)
-#     model.fit(x[xx], y_[xx],
-#               epochs=500,
-#               batch_size=256,
-#               verbose=1,
-#               shuffle=True,
-#               validation_data=(x[yy], y_[yy]),
-#               callbacks=[plateau, early_stopping, checkpoint])
-#     model.load_weights(f'fold{fold}.h5')
-#     proba_t += model.predict(t, verbose=0, batch_size=1024) / 5.
-# sub.behavior_id = np.argmax(proba_t, axis=1)
-# sub.to_csv('submit_cnn4.1.csv', index=False)
+proba_t = np.zeros((7500, 19))
+for fold, (xx, yy) in enumerate(kfold.split(x, y)):
+    y_ = to_categorical(y, num_classes=19)
+    model = Net()
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=Adam(),
+                  metrics=['acc'])
+    plateau = ReduceLROnPlateau(monitor="val_acc",
+                                verbose=1,
+                                mode='max',
+                                factor=0.5,
+                                patience=8)
+    early_stopping = EarlyStopping(monitor='val_acc',
+                                   verbose=0,
+                                   mode='max',
+                                   patience=18)
+    checkpoint = ModelCheckpoint(f'fold{fold}.h5',
+                                 monitor='val_acc',
+                                 verbose=0,
+                                 mode='max',
+                                 save_best_only=True)
+    model.fit(x[xx], y_[xx],
+              epochs=500,
+              batch_size=256,
+              verbose=1,
+              shuffle=True,
+              validation_data=(x[yy], y_[yy]),
+              callbacks=[plateau, early_stopping, checkpoint])
+    model.load_weights(f'fold{fold}.h5')
+    proba_t += model.predict(t, verbose=0, batch_size=1024) / 5.
+sub.behavior_id = np.argmax(proba_t, axis=1)
+from datetime import datetime
+sub.to_csv(f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_submit_cnn4.1_C.csv', index=False)
