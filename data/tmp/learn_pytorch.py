@@ -26,9 +26,10 @@ class CNN_NET(torch.nn.Module):
                         in_channels=in_channels,              # input height  数字识别是灰白照片，只有一个channel
                         out_channels=16,            # n_filters
                         kernel_size=3,              # filter size
-                        stride=3,                   # filter movement/step
-                        padding=0,                  # if want same width and length of this image after con2d, padding=(kernel_size-1)/2 if stride=1
+                        stride=1,                   # filter movement/step
+                        padding=1,                  # if want same width and length of this image after con2d, padding=(kernel_size-1)/2 if stride=1
                     ),
+                nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1),
                 # nn.ReLU(),
                 # nn.AvgPool2d(kernel_size=2),
             )

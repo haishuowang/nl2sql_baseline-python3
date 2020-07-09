@@ -25,7 +25,7 @@ from IPython.core.interactiveshell import InteractiveShell
 
 InteractiveShell.ast_node_interactivity = "all"
 
-data_path = '/home/server/yugt/mobile/'
+data_path = ''
 data_train = pd.read_csv(data_path + 'sensor_train.csv')
 data_test = pd.read_csv(data_path + 'sensor_test.csv')
 data_test['fragment_id'] += 10000
@@ -96,12 +96,16 @@ kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=2020)
 for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
     x_trn, y_trn, x_val, y_val = train_x.iloc[trn_idx], train_y.iloc[trn_idx], train_x.iloc[val_idx], train_y.iloc[
         val_idx]
-    x_trn = torch.Tensor(np.array(x_trn)).unsqueeze(1)
-    x_val = torch.Tensor(np.array(x_val)).unsqueeze(1)
-    y_trn = torch.Tensor(np.array(y_trn, dtype='int')).long()
-    y_val = torch.Tensor(np.array(y_val, dtype='int')).long()
+    # x_trn = torch.Tensor(np.array(x_trn)).unsqueeze(1)
+    # x_val = torch.Tensor(np.array(x_val)).unsqueeze(1)
+    # y_trn = torch.Tensor(np.array(y_trn, dtype='int')).long()
+    # y_val = torch.Tensor(np.array(y_val, dtype='int')).long()
 
-    torch.from_numpy(np.array([1, 2, 3]))
+    x_trn = torch.from_numpy(np.array(x_trn)).unsqueeze(1)
+    x_val = torch.from_numpy(np.array(x_val)).unsqueeze(1)
+    y_trn = torch.from_numpy(np.array(y_trn, dtype='int')).long()
+    y_val = torch.from_numpy(np.array(y_val, dtype='int')).long()
+
     # print(x_trn.shape)
     max_acc = 0
     early_stop = 0
