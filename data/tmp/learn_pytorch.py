@@ -20,7 +20,7 @@ EMBEDDING_SIZE = 650
 MAX_VOCAB_SIZE = 50000
 
 in_channels = 3
-
+torch.Tensor
 
 class CNN_NET(torch.nn.Module):
     def __init__(self):
