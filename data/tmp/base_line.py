@@ -1,120 +1,137 @@
 import numpy as np
 import pandas as pd
-import lightgbm as lgb
+from scipy.signal import resample
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
-from sklearn.preprocessing import LabelEncoder
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.stats import entropy
-import gc
-import os
 from tqdm import tqdm
-pd.set_option('display.max_columns', 600)
-pd.set_option('display.max_rows', 600)
-from IPython.core.interactiveshell import InteractiveShell
-InteractiveShell.ast_node_interactivity = "all"
-data_path = 'E:/contest/2020创青春交子杯/'
-data_train = pd.read_csv('sensor_train.csv')
-data_test = pd.read_csv('sensor_test.csv')
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils import data
 
-data_test['fragment_id'] += 10000
-label = 'behavior_id'
-data = pd.concat([data_train, data_test], sort=False)
-df = data.drop_duplicates(subset=['fragment_id']).reset_index(drop=True)[['fragment_id', 'behavior_id']]
-data['acc'] = (data['acc_x'] ** 2 + data['acc_y'] ** 2 + data['acc_z'] ** 2) ** 0.5
-data['accg'] = (data['acc_xg'] ** 2 + data['acc_yg'] ** 2 + data['acc_zg'] ** 2) ** 0.5
-for f in tqdm([f for f in data.columns if 'acc' in f]):
-    for stat in ['min', 'max', 'mean', 'median', 'std', 'skew']:
-        df[f+'_'+stat] = data.groupby('fragment_id')[f].agg(stat).values
-train_df = df[df[label].isna()==False].reset_index(drop=True)
-test_df = df[df[label].isna()==True].reset_index(drop=True)
+# from torchvision import datasets, transforms
+print("PyTorch Version: ", torch.__version__)
 
-drop_feat = []
-used_feat = [f for f in train_df.columns if f not in (['fragment_id', label] + drop_feat)]
-print(len(used_feat))
-print(used_feat)
 
-train_x = train_df[used_feat]
-train_y = train_df[label]
-test_x = test_df[used_feat]
-scores = []
-imp = pd.DataFrame()
-imp['feat'] = used_feat
+def fun(data):
+    # data['acc_xc'] = data['acc_xg'] - data['acc_x']
+    # data['acc_yc'] = data['acc_yg'] - data['acc_y']
+    # data['acc_zc'] = data['acc_zg'] - data['acc_z']
+    # data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
+    # data['mod'] = (data.acc_x ** 2 + data.acc_y ** 2 + data.acc_z ** 2) ** .5
+    # data['modg'] = (data.acc_xg ** 2 + data.acc_yg ** 2 + data.acc_zg ** 2) ** .5
+    return data
 
-params = {
-    'learning_rate': 0.1,
-    'metric': 'multi_error',
-    'objective': 'multiclass',
-    'num_class': 19,
-    'feature_fraction': 0.80,
-    'bagging_fraction': 0.75,
-    'bagging_freq': 2,
-    'n_jobs': 4,
-    'seed': 2020,
-    'max_depth': 10,
-    'num_leaves': 64,
-    'lambda_l1': 0.5,
-    'lambda_l2': 0.5,
-}
 
-oof_train = np.zeros((len(train_x), 19))
-preds = np.zeros((len(test_x), 19))
-folds = 5
-seeds = [44]#, 2020, 527, 1527]
-for seed in seeds:
-    kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
+def get_data():
+    root_path = ''
+    train = pd.read_csv(root_path + 'sensor_train.csv')
+    test = pd.read_csv(root_path + 'sensor_test.csv')
+    sub = pd.read_csv(root_path + '提交结果示例.csv')
+    train_y = train.groupby('fragment_id')['behavior_id'].min()
+    train_y = torch.from_numpy(train_y.values).long()
+    train = fun(train)
+    test = fun(test)
+    return train, test, train_y, sub
+
+
+def data_tensor(test, train):
+    train_x = torch.zeros((7292, 1, 60, len(use_feat)))
+    test_x = torch.zeros((7500, 1, 60, len(use_feat)))
+
+    for i in tqdm(range(7292)):
+        tmp = train[train.fragment_id == i][:60]
+        data, label = resample(tmp[use_feat], 60, np.array(tmp.time_point))
+        train_x[i, 0, :, :] = torch.from_numpy(data)
+
+    for i in tqdm(range(7500)):
+        tmp = test[test.fragment_id == i][:60]
+        data, label = resample(tmp[use_feat], 60, np.array(tmp.time_point))
+        test_x[i, 0, :, :] = torch.from_numpy(data)
+    return train_x, test_x
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = x.view(x.shape[0], -1)
+
+        x = F.relu(nn.Linear(x.shape[1], 500)(x))
+
+        x = nn.Linear(500, 19)(x)
+        # return x
+        return F.log_softmax(x, dim=1)  # log probability
+
+
+def train_func(model, device, train_loader, loss_func, optimizer, epoch):
+    model.train()
+    for idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+
+        pred = model(data)  # batch_size * 10
+        # loss = F.nll_loss(pred, target)
+        loss = loss_func(pred, target)
+
+        # SGD
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if idx % 100 == 0:
+            print("Train Epoch: {}, iteration: {}, Loss: {}".format(
+                epoch, idx, loss.item()))
+
+
+def test_func(model, device, test_loader):
+    model.eval()
+    total_loss = 0.
+    correct = 0.
+    with torch.no_grad():
+        for idx, (data, target) in enumerate(test_loader):
+            data, target = data.to(device), target.to(device)
+
+            output = model(data)  # batch_size * 10
+            total_loss += F.nll_loss(output, target, reduction="sum").item()
+            pred = output.argmax(dim=1)  # batch_size * 1
+            correct += pred.eq(target.view_as(pred)).sum().item()
+
+    total_loss /= len(test_loader.dataset)
+    acc = correct / len(test_loader.dataset) * 100.
+    print("Test loss: {}, Accuracy: {}".format(total_loss, acc))
+
+
+if __name__ == '__main__':
+    train, test, train_y, sub = get_data()
+    use_feat = [f for f in train.columns if f not in ['fragment_id', 'time_point', 'behavior_id']]
+    train_x, test_x = data_tensor(test, train)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    proba_t = np.zeros((7500, 19))
+
+    epochs = 100
+    learning_rate = 0.01
+    momentum = 0.5
+    batch_size = 100
+    kfold = StratifiedKFold(n_splits=5, random_state=2020)
+
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
-        x_trn, y_trn, x_val, y_val = train_x.iloc[trn_idx], train_y.iloc[trn_idx], train_x.iloc[val_idx], train_y.iloc[val_idx]
-        train_set = lgb.Dataset(x_trn, y_trn)
-        val_set = lgb.Dataset(x_val, y_val)
-
-        model = lgb.train(params, train_set, num_boost_round=500000,
-                          valid_sets=(train_set, val_set), early_stopping_rounds=50,
-                          verbose_eval=20)
-        oof_train[val_idx] += model.predict(x_val) / len(seeds)
-        preds += model.predict(test_x) / folds / len(seeds)
-        scores.append(model.best_score['valid_1']['multi_error'])
-        imp['gain' + str(fold + 1)] = model.feature_importance(importance_type='gain')
-        imp['split' + str(fold + 1)] = model.feature_importance(importance_type='split')
-        del x_trn, y_trn, x_val, y_val, model, train_set, val_set
-        gc.collect()
-imp['gain'] = imp[[f for f in imp.columns if 'gain' in f]].sum(axis=1)/folds
-imp['split'] = imp[[f for f in imp.columns if 'split' in f]].sum(axis=1)
-imp = imp.sort_values(by=['gain'], ascending=False)
-imp[['feat', 'gain', 'split']]
-imp = imp.sort_values(by=['split'], ascending=False)
-imp[['feat', 'gain', 'split']]
-def acc_combo(y, y_pred):
-    # 数值ID与行为编码的对应关系
-    mapping = {0: 'A_0', 1: 'A_1', 2: 'A_2', 3: 'A_3',
-        4: 'D_4', 5: 'A_5', 6: 'B_1',7: 'B_5',
-        8: 'B_2', 9: 'B_3', 10: 'B_0', 11: 'A_6',
-        12: 'C_1', 13: 'C_3', 14: 'C_0', 15: 'B_6',
-        16: 'C_2', 17: 'C_5', 18: 'C_6'}
-    # 将行为ID转为编码
-    code_y, code_y_pred = mapping[y], mapping[y_pred]
-    if code_y == code_y_pred: #编码完全相同得分1.0
-        return 1.0
-    elif code_y.split("_")[0] == code_y_pred.split("_")[0]: #编码仅字母部分相同得分1.0/7
-        return 1.0/7
-    elif code_y.split("_")[1] == code_y_pred.split("_")[1]: #编码仅数字部分相同得分1.0/3
-        return 1.0/3
-    else:
-        return 0.0
-labels = np.argmax(preds, axis=1)
-oof_y = np.argmax(oof_train, axis=1)
-round(accuracy_score(train_y, oof_y), 5)
-score = sum(acc_combo(y_true, y_pred) for y_true, y_pred in zip(train_y, oof_y)) / oof_y.shape[0]
-round(score, 5)
-sub = pd.read_csv('提交结果示例.csv')
-
-sub['behavior_id'] = labels
-
-vc = data_train['behavior_id'].value_counts().sort_index()
-sns.barplot(vc.index, vc.values)
-plt.show()
-vc = sub['behavior_id'].value_counts().sort_index()
-sns.barplot(vc.index, vc.values)
-plt.show()
-sub.to_csv('sub%.5f.csv' % score, index=False)
+        model = Net().to(device)
+        loss_func = nn.CrossEntropyLoss().to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
+        x_trn, y_trn, x_val, y_val = train_x[trn_idx], train_y[trn_idx], train_x[val_idx], train_y[val_idx]
+        train_dataset = data.TensorDataset(x_trn.to(device), y_trn.to(device))
+        train_loader = data.DataLoader(train_dataset, batch_size=batch_size)
+        test_dataset = data.TensorDataset(x_val.to(device), y_val.to(device))
+        test_loader = data.DataLoader(test_dataset, batch_size=batch_size)
+        for epoch in range(1, epochs + 1):
+            train_func(model, device, train_loader, loss_func, optimizer, epoch)
+            test_func(model, device, test_loader)

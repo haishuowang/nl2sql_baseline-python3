@@ -1,68 +1,104 @@
-# import torchtext
-# from torchtext.vocab import Vectors
-import torch
 import numpy as np
-import random
-import torch.nn.functional as F
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torchvision import datasets, transforms
 
-USE_CUDA = torch.cuda.is_available()
+print("PyTorch Version: ", torch.__version__)
 
-# 为了保证实验结果可以复现，我们经常会把各种random seed固定在某一个值
-random.seed(53113)
-np.random.seed(53113)
-torch.manual_seed(53113)
-if USE_CUDA:
-    torch.cuda.manual_seed(53113)
 
-BATCH_SIZE = 32
-EMBEDDING_SIZE = 650
-MAX_VOCAB_SIZE = 50000
-
-in_channels = 3
-torch.Tensor
-
-class CNN_NET(torch.nn.Module):
+class Net(nn.Module):
     def __init__(self):
-        super(CNN_NET, self).__init__()
-        # self.conv1 = nn.Sequential(
-        #     nn.Conv2d(
-        #         in_channels=60,  # input height  数字识别是灰白照片，只有一个channel
-        #         out_channels=128,  # n_filters
-        #         kernel_size=3,  # filter size
-        #         stride=1,  # filter movement/step
-        #         padding=1,
-        #         # if want same width and length of this image after con2d, padding=(kernel_size-1)/2 if stride=1
-        #     ),
-        #     nn.Conv2d(in_channels=128, out_channels=32, kernel_size=3, padding=1),
-        #     # nn.ReLU(),
-        #     # nn.AvgPool2d(kernel_size=2),
-        # )
-        # x = F.softmax(input=x, dim=1)
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5, 1)  # 28 * 28 -> (28+1-5) 24 * 24
+        self.conv2 = nn.Conv2d(20, 50, 5, 1)  # 20 * 20
+        self.fc1 = nn.Linear(4 * 4 * 50, 500)
+        self.fc2 = nn.Linear(500, 10)
 
-        self.conv1 = nn.Sequential(nn.Conv2d(in_channels=60, out_channels=64, kernel_size=3, padding=1),
-                                   nn.ReLU(),
-                                   nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-                                   nn.ReLU(),
-
-                                   nn.MaxPool2d((2, 2)),
-                                   nn.Dropout(0.2),
-
-                                   nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
-                                   nn.ReLU(),
-
-                                   nn.Dropout(0.3),
-
-                                   nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
-                                   nn.ReLU(),
-                                   nn.MaxPool2d((2, 2)),
-                                   nn.Dropout(0.5),
-                                   nn.Softmax()
-                                   )
+    def forward(self, x):
+        # x: 1 * 28 * 28
+        x = F.relu(self.conv1(x))  # 20 * 24 * 24
+        x = F.max_pool2d(x, 2, 2)  # 12 * 12
+        x = F.relu(self.conv2(x))  # 8 * 8
+        x = F.max_pool2d(x, 2, 2)  # 4 *4
+        x = x.view(-1, 4 * 4 * 50)  # reshape (5 * 2 * 10), view(5, 20) -> (5 * 20)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        # return x
+        return F.log_softmax(x, dim=1)  # log probability
 
 
-net_test = CNN_NET()
-#
-test_data = torch.randn(200, 60, 12, 1)
-out1 = net_test.conv1(test_data)
-print(out1.shape)
+def train(model, device, train_loader, optimizer, epoch):
+    model.train()
+    for idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+
+        pred = model(data)  # batch_size * 10
+        loss = F.nll_loss(pred, target)
+
+        # SGD
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if idx % 100 == 0:
+            print("Train Epoch: {}, iteration: {}, Loss: {}".format(
+                epoch, idx, loss.item()))
+
+
+def test(model, device, test_loader):
+    model.eval()
+    total_loss = 0.
+    correct = 0.
+    with torch.no_grad():
+        for idx, (data, target) in enumerate(test_loader):
+            data, target = data.to(device), target.to(device)
+
+            output = model(data)  # batch_size * 10
+            total_loss += F.nll_loss(output, target, reduction="sum").item()
+            pred = output.argmax(dim=1)  # batch_size * 1
+            correct += pred.eq(target.view_as(pred)).sum().item()
+
+    total_loss /= len(test_loader.dataset)
+    acc = correct / len(test_loader.dataset) * 100.
+    print("Test loss: {}, Accuracy: {}".format(total_loss, acc))
+
+if __name__ == '__main__':
+    mnist_data = datasets.MNIST("./mnist_data", train=True, download=False,
+                                transform=transforms.Compose([
+                                    transforms.ToTensor(),
+                                ]))
+    # mnist_data
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    batch_size = 32
+    train_dataloader = torch.utils.data.DataLoader(
+        datasets.MNIST("./mnist_data", train=True, download=True,
+                       transform=transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ])),
+        batch_size=batch_size, shuffle=True,
+        num_workers=1, pin_memory=True
+    )
+    test_dataloader = torch.utils.data.DataLoader(
+        datasets.MNIST("./mnist_data", train=False, download=True,
+                       transform=transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ])),
+        batch_size=batch_size, shuffle=True,
+        num_workers=1, pin_memory=True
+    )
+
+    lr = 0.01
+    momentum = 0.5
+    model = Net().to(device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum)
+
+    num_epochs = 2
+    for epoch in range(num_epochs):
+        train(model, device, train_dataloader, optimizer, epoch)
+        test(model, device, test_dataloader)
+
+    torch.save(model.state_dict(), "mnist_cnn.pt")
