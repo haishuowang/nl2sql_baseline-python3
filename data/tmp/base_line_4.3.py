@@ -104,8 +104,6 @@ class LeNet(nn.Module):
         x = x.reshape(x.shape[0], -1)
 
         x = nn.Linear(in_features=x.shape[1], out_features=256)(x)
-        # y = y.transpos(dim0=0, dim1=1)
-        # print(y.shape)
         x = nn.Linear(in_features=x.shape[1], out_features=19)(x)
         x = nn.Softmax()(x)
         return x
@@ -154,6 +152,9 @@ for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
             loss = loss_func(output, y_trn_b)
             loss.backward()
             optimizer.step()
+            # print(len(optimizer.param_groups))
+            # print(len(optimizer.param_groups[0]['params']))
+            # print(optimizer.param_groups[0]['params'][0].grad)
             print('Epoch: ', epoch, 'batch_size', i, '| train loss: %.4f' % loss.cpu().data.numpy())
 
         output_ = model(x_val.cuda())
