@@ -3,17 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
 from torch.autograd import Variable
-from sklearn.model_selection import KFold, RepeatedKFold, StratifiedKFold
 import torch.optim as optim
 import numpy as np
 from scipy.signal import resample
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
-from sklearn.preprocessing import LabelEncoder
 # import seaborn as sns
 import matplotlib.pyplot as plt
-from scipy.stats import entropy
-import os
 from tqdm import tqdm
 from torch.utils import data
 import random
@@ -21,11 +17,11 @@ import random
 USE_CUDA = torch.cuda.is_available()
 
 # 为了保证实验结果可以复现，我们经常会把各种random seed固定在某一个值
-# random.seed(53113)
-# np.random.seed(53113)
-# torch.manual_seed(53113)
-# if USE_CUDA:
-#     torch.cuda.manual_seed(53113)
+random.seed(53113)
+np.random.seed(53113)
+torch.manual_seed(53113)
+if USE_CUDA:
+    torch.cuda.manual_seed(53113)
 
 pd.set_option('display.max_columns', 600)
 pd.set_option('display.max_rows', 600)
@@ -35,10 +31,10 @@ InteractiveShell.ast_node_interactivity = "all"
 
 
 def fun(data):
-    # data['acc_xc'] = data['acc_xg'] - data['acc_x']
-    # data['acc_yc'] = data['acc_yg'] - data['acc_y']
-    # data['acc_zc'] = data['acc_zg'] - data['acc_z']
-    # data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
+    data['acc_xc'] = data['acc_xg'] - data['acc_x']
+    data['acc_yc'] = data['acc_yg'] - data['acc_y']
+    data['acc_zc'] = data['acc_zg'] - data['acc_z']
+    data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
     data['mod'] = (data.acc_x ** 2 + data.acc_y ** 2 + data.acc_z ** 2) ** .5
     data['modg'] = (data.acc_xg ** 2 + data.acc_yg ** 2 + data.acc_zg ** 2) ** .5
     return data
@@ -86,7 +82,8 @@ class MyNet(nn.Module):
         self.conv4 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
         self.max_pool = nn.MaxPool2d(2)
         self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
-        self.dropout = nn.Dropout(0.4)
+        self.dropout1 = nn.Dropout(0.2)
+        self.dropout2 = nn.Dropout(0.4)
         self.fc1 = nn.Linear(in_features=512, out_features=19)
         self.relu = nn.ReLU()
 
@@ -94,12 +91,13 @@ class MyNet(nn.Module):
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
         x = self.max_pool(x)
+        x = self.dropout1(x)
 
         x = self.relu(self.conv3(x))
         x = self.relu(self.conv4(x))
         x = self.adaptive_max_pool(x)
         x = x.view(-1, 512)
-        x = self.dropout(x)
+        x = self.dropout2(x)
         x = self.fc1(x)
         x = F.log_softmax(x, dim=1)
         return x
@@ -107,19 +105,21 @@ class MyNet(nn.Module):
 
 def train_func(model, device, train_loader, optimizer, epoch):
     model.train()
-    for idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device), target.to(device)
 
-        pred = model(data)  # batch_size * 10
-        loss = F.nll_loss(pred, target)
+    for idx, (part_train, target) in enumerate(train_loader):
+        data, target = part_train.to(device), target.to(device)
 
-        # SGD
+        output = model(part_train)  # batch_size * 10
+        loss = F.nll_loss(output, target)
+        pred = output.argmax(dim=1)
+        part_correct = pred.eq(target.view_as(pred)).sum().item()
+        acc = part_correct / len(target)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         # if idx % 100 == 0:
-        print("Train Epoch: {}, iteration: {}, Loss: {}".format(
-            epoch, idx, loss.item()))
+        print("Train Epoch: {}, iteration: {}, Train loss: {}, Acc={}".format(
+            epoch, idx, round(loss.item(), 4), round(acc * 100, 2)))
 
 
 def test_func(model, device, test_loader):
@@ -127,24 +127,31 @@ def test_func(model, device, test_loader):
     total_loss = 0.
     correct = 0.
     with torch.no_grad():
-        for idx, (data, target) in enumerate(test_loader):
-            data, target = data.to(device), target.to(device)
+        for idx, (part_test, target) in enumerate(test_loader):
+            part_test, target = part_test.to(device), target.to(device)
 
-            output = model(data)  # batch_size * 10
+            output = model(part_test)  # batch_size * 10
             total_loss += F.nll_loss(output, target, reduction="sum").item()
             pred = output.argmax(dim=1)  # batch_size * 1
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     total_loss /= len(test_loader.dataset)
-    acc = correct / len(test_loader.dataset) * 100.
-    print("Test loss: {}, Accuracy: {}".format(total_loss, acc))
+    val_acc = correct / len(test_loader.dataset) * 100.
+    print('*******************************')
+    print("test loss: {}, val_acc: {}".format(total_loss, val_acc))
+    print('*******************************')
+    return val_acc
+
+
+def predict_fun():
+    pass
 
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     proba_t = np.zeros((7500, 19))
     learning_rate = 0.001
-    batch_size = 256
+    batch_size = 512
     kfold = StratifiedKFold(n_splits=5, random_state=2020, shuffle=True)
 
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
@@ -159,12 +166,37 @@ if __name__ == '__main__':
         model = MyNet().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-        num_epochs = 20
+        num_epochs = 500
+        early_stop_init = 0
+        early_stop_step = 20
+        max_acc = 0
+
+        change_lr_con = True
+        change_lr_rate = 0.1
+        change_lr_init = 0
+        change_lr_step = 16
+
         for epoch in range(num_epochs):
             train_func(model, device, train_loader, optimizer, epoch)
-            test_func(model, device, test_loader)
+            val_acc = test_func(model, device, test_loader)
+            print(f'max_val={max_acc}， early_stop_init={early_stop_init}, '
+                  f'change_lr_init={change_lr_init}')
+            if max_acc < val_acc:
+                max_acc = val_acc
+                early_stop_init = 0
+                change_lr_init = 0
 
-        # torch.save(model.state_dict(), "mnist_cnn.pt")
+            elif change_lr_con:
+                change_lr_init += 1
+                if change_lr_init >= change_lr_step:
+                    lr = lr * change_lr_rate
+                    change_lr_con = False
+            else:
+                early_stop_init += 1
+                if early_stop_init >= early_stop_step:
+                    break
+
+        torch.save(model.state_dict(), f"mnist_cnn{fold}.pt")
 
 # certion = nn.CrossEntropyLoss()
 # epochs = 5000
@@ -195,13 +227,13 @@ if __name__ == '__main__':
 #         acc = cnt / len_dataset * 100
 #         print("Epoch{}: Accu in val_set is {}.".format(epoch, acc))
 #
-#         if max_acc < acc:
-#             max_acc = acc
-#             early_stop = 0
-#         else:
-#             early_stop += 1
-#             if early_stop >= 50:
-#                 break
+# if max_acc < acc:
+#     max_acc = acc
+#     early_stop = 0
+# else:
+#     early_stop += 1
+#     if early_stop >= 50:
+#         break
 
 # a = torch.randn(4, 3, 28, 28)
 # aa = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1)(a)
