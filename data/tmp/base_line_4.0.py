@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from scipy.signal import resample
-from sklearn.model_selection import StratifiedKFold
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
@@ -40,22 +39,29 @@ def Net():
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(input)
+    print(X.shape)
     X = Conv2D(filters=128,
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(X)
+    print(X.shape)
     X = MaxPooling2D()(X)
+    print(X.shape)
     X = Conv2D(filters=256,
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(X)
+    print(X.shape)
     X = Conv2D(filters=512,
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(X)
+    print(X.shape)
     X = GlobalMaxPooling2D()(X)
+    print(X.shape)
     X = Dropout(0.4)(X)
     X = Dense(19, activation='softmax')(X)
+    print(X.shape)
     return Model([input], X)
 
 

@@ -2,10 +2,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from scipy.signal import resample
+from tqdm import tqdm
 import torch.optim as optim
 from torchvision import datasets, transforms
-
+from torch.utils import data
+import pandas as pd
 print("PyTorch Version: ", torch.__version__)
+
+from sklearn.model_selection import StratifiedKFold
 
 
 class Net(nn.Module):
@@ -25,7 +30,6 @@ class Net(nn.Module):
         x = x.view(-1, 4 * 4 * 50)  # reshape (5 * 2 * 10), view(5, 20) -> (5 * 20)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-
         # return x
         return F.log_softmax(x, dim=1)  # log probability
 
@@ -91,7 +95,6 @@ if __name__ == '__main__':
         batch_size=batch_size, shuffle=True,
         num_workers=1, pin_memory=True
     )
-
     lr = 0.01
     momentum = 0.5
     model = Net().to(device)

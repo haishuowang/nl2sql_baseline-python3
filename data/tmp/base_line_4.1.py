@@ -50,49 +50,33 @@ def Net():
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(input)
-    print(X.shape)
+    X = Dropout(0.2)(X)
     X = Conv2D(filters=128,
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(X)
-    print(X.shape)
+    X = Dropout(0.2)(X)
     # X = Conv2D(filters=256,
     #            kernel_size=(3, 3),
     #            activation='relu',
     #            padding='same')(X)
 
     X = MaxPooling2D()(X)
-    print(X.shape)
     X = Dropout(0.2)(X)
-    print(X.shape)
     X = Conv2D(filters=256,
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(X)
-    print(X.shape)
     X = Dropout(0.3)(X)
-    print(X.shape)
     X = Conv2D(filters=512,
                kernel_size=(3, 3),
                activation='relu',
                padding='same')(X)
-    print(X.shape)
     X = GlobalMaxPooling2D()(X)
-    print(X.shape)
     X = Dropout(0.5)(X)
-    print(X.shape)
     X = Dense(19, activation='softmax')(X)
     return Model([input], X)
 
-(None, 60, 12, 64)
-(None, 60, 12, 128)
-(None, 30, 6, 128)
-(None, 30, 6, 128)
-(None, 30, 6, 256)
-(None, 30, 6, 256)
-(None, 30, 6, 512)
-(None, 512)
-(None, 512)
 kfold = StratifiedKFold(5, random_state=2020, shuffle=True)
 
 proba_t = np.zeros((7500, 19))

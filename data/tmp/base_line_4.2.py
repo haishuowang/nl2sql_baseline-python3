@@ -60,8 +60,8 @@ class LeNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=6, kernel_size=3, padding=0)
-        self.conv2 = nn.Conv1d(in_channels=6, out_channels=16, kernel_size=3, padding=0)
+        self.conv1 = nn.Conv1d(in_channels=1, out_channels=6, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv1d(in_channels=6, out_channels=16, kernel_size=3, padding=1)
         self.pool = nn.AvgPool1d(kernel_size=2, stride=2)
         self.fc1 = nn.Linear(in_features=336, out_features=256)
         self.fc2 = nn.Linear(in_features=256, out_features=19)

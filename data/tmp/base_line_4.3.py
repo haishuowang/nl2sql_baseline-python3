@@ -39,8 +39,8 @@ def fun(data):
     # data['acc_yc'] = data['acc_yg'] - data['acc_y']
     # data['acc_zc'] = data['acc_zg'] - data['acc_z']
     # data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
-    # data['mod'] = (data.acc_x ** 2 + data.acc_y ** 2 + data.acc_z ** 2) ** .5
-    # data['modg'] = (data.acc_xg ** 2 + data.acc_yg ** 2 + data.acc_zg ** 2) ** .5
+    data['mod'] = (data.acc_x ** 2 + data.acc_y ** 2 + data.acc_z ** 2) ** .5
+    data['modg'] = (data.acc_xg ** 2 + data.acc_yg ** 2 + data.acc_zg ** 2) ** .5
     return data
 
 
@@ -77,98 +77,94 @@ use_feat = [f for f in train.columns if f not in ['fragment_id', 'time_point', '
 train_x, test_x = data_tensor(test, train)
 
 
-class LeNet(nn.Module):
+class MyNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
-        nn.Sequential()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
         self.max_pool = nn.MaxPool2d(2)
+        self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
+        self.dropout = nn.Dropout(0.4)
+        self.fc1 = nn.Linear(in_features=512, out_features=19)
         self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
-
         x = self.max_pool(x)
-        x = nn.Dropout(0.2)(x)
+
         x = self.relu(self.conv3(x))
-
-        x = nn.Dropout(0.3)(x)
         x = self.relu(self.conv4(x))
-        x = self.max_pool(x)
-
-        x = nn.Dropout(0.5)(x)
-        x = x.reshape(x.shape[0], -1)
-
-        x = nn.Linear(in_features=x.shape[1], out_features=256)(x)
-        x = nn.Linear(in_features=x.shape[1], out_features=19)(x)
-        x = nn.Softmax()(x)
+        x = self.adaptive_max_pool(x)
+        x = x.view(-1, 512)
+        x = self.dropout(x)
+        x = self.fc1(x)
+        x = F.log_softmax(x, dim=1)
         return x
 
 
-# class CNN(nn.Module):
-#     def __init__(self):
-#         super(CNN, self).__init__()
-#         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
-#         self.pool = nn.MaxPool2d(2, 2)
-#         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-#         self.fc1 = nn.Linear(64 * 7 * 7, 1024)
-#         self.fc2 = nn.Linear(1024, 512)
-#         self.fc3 = nn.Linear(512, 10)
-#
-#     def forward(self, x):
-#         x = nn.Dropout(0.2)(self.pool(F.relu(self.conv1(x))))
-#         x = nn.Dropout(0.3)(self.pool(F.relu(self.conv2(x))))
-#
-#         x = x.view(x.shape[0], -1)  # 将数据平整为一维的
-#         x = F.relu(nn.Linear(x.shape[1], 1024)(x))
-#         x = F.relu(nn.Linear(x.shape[1], 512)(x))
-#         x = nn.Linear(x.shape[1], 19)(x)
-#         return x
+def train_func(model, device, train_loader, optimizer, epoch):
+    model.train()
+    for idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+
+        pred = model(data)  # batch_size * 10
+        loss = F.nll_loss(pred, target)
+
+        # SGD
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # if idx % 100 == 0:
+        print("Train Epoch: {}, iteration: {}, Loss: {}".format(
+            epoch, idx, loss.item()))
 
 
-proba_t = np.zeros((7500, 19))
+def test_func(model, device, test_loader):
+    model.eval()
+    total_loss = 0.
+    correct = 0.
+    with torch.no_grad():
+        for idx, (data, target) in enumerate(test_loader):
+            data, target = data.to(device), target.to(device)
 
-epochs = 100
-learning_rate = 0.001
-batch_size = 500
-kfold = StratifiedKFold(n_splits=5, random_state=2020)
+            output = model(data)  # batch_size * 10
+            total_loss += F.nll_loss(output, target, reduction="sum").item()
+            pred = output.argmax(dim=1)  # batch_size * 1
+            correct += pred.eq(target.view_as(pred)).sum().item()
 
-for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
-    model = LeNet().cuda()
-    loss_func = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-    x_trn, y_trn, x_val, y_val = train_x[trn_idx], train_y[trn_idx], train_x[val_idx], train_y[val_idx]
-    torch_dataset = data.TensorDataset(x_trn.cuda(), y_trn.cuda())
-    train_loader = data.DataLoader(torch_dataset, batch_size=batch_size)
-    for epoch in range(1, epochs + 1):
-        for i, (x_trn_b, y_trn_b) in enumerate(train_loader):
-            output = model(x_trn_b)
-            optimizer.zero_grad()
-            loss = loss_func(output, y_trn_b)
-            loss.backward()
-            optimizer.step()
-            # print(len(optimizer.param_groups))
-            # print(len(optimizer.param_groups[0]['params']))
-            # print(optimizer.param_groups[0]['params'][0].grad)
-            print('Epoch: ', epoch, 'batch_size', i, '| train loss: %.4f' % loss.cpu().data.numpy())
+    total_loss /= len(test_loader.dataset)
+    acc = correct / len(test_loader.dataset) * 100.
+    print("Test loss: {}, Accuracy: {}".format(total_loss, acc))
 
-        output_ = model(x_val.cuda())
-        output_ = torch.argmax(output_, dim=1)
-        print(output_)
-        # print('Epoch: ', epoch, '| train loss: %.4f' % loss.data.numpy(), '| test accuracy: %.2f' % accuracy)
-    # max_acc = 0
-    # early_stop = 0
-    # Adam = optim.Adam(model.parameters(), lr=learning_rate)
 
-    #     # model.train()
-    #
-    #
-    #     Adam.zero_grad()
+if __name__ == '__main__':
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    proba_t = np.zeros((7500, 19))
+    learning_rate = 0.001
+    batch_size = 256
+    kfold = StratifiedKFold(n_splits=5, random_state=2020, shuffle=True)
+
+    for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
+        x_trn, y_trn, x_val, y_val = train_x[trn_idx], train_y[trn_idx], train_x[val_idx], train_y[val_idx]
+        train_dataset = data.TensorDataset(x_trn.to(device), y_trn.to(device))
+        train_loader = data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+        test_dataset = data.TensorDataset(x_val.to(device), y_val.to(device))
+        test_loader = data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+        lr = 0.001
+        model = MyNet().to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+        num_epochs = 20
+        for epoch in range(num_epochs):
+            train_func(model, device, train_loader, optimizer, epoch)
+            test_func(model, device, test_loader)
+
+        # torch.save(model.state_dict(), "mnist_cnn.pt")
 
 # certion = nn.CrossEntropyLoss()
 # epochs = 5000
