@@ -113,7 +113,19 @@ class MyNet(nn.Module):
         x = self.fc1(x)
         x = F.log_softmax(x, dim=1)
         return x
- 
+
+
+class PaNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=[1, 3], padding=1)
+        # self.max_pool = nn.MaxPool2d()
+
+    def forward(self, x):
+        x = self.conv1(x)
+        print(x)
+        return x
+
 
 def train_func(model, device, train_loader, optimizer, epoch):
     model.train()
@@ -246,6 +258,7 @@ if __name__ == '__main__':
             result_tensor = torch.cat(res_list)
             return result_tensor
 
+
         result_tensor = predict_fun(model, device, pred_loader)
         result_array = np.array(result_tensor)
         proba_t += result_array / 5
@@ -255,7 +268,3 @@ if __name__ == '__main__':
     sub = pd.read_csv('提交结果示例.csv')
     sub.behavior_id = pred_y
     sub.to_csv(f'{date_begin}_submit_cnn4.3.csv', index=False)
-
-
-
-
