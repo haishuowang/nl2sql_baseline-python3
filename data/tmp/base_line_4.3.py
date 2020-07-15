@@ -82,22 +82,30 @@ class MyNet(nn.Module):
         self.conv4 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
         self.max_pool = nn.MaxPool2d(2)
         self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
+
         self.dropout1 = nn.Dropout(0.2)
-        self.dropout2 = nn.Dropout(0.4)
+        self.dropout2 = nn.Dropout(0.2)
+        self.dropout3 = nn.Dropout(0.2)
+        self.dropout4 = nn.Dropout(0.2)
+        self.dropout5 = nn.Dropout(0.3)
+        self.dropout6 = nn.Dropout(0.4)
         self.fc1 = nn.Linear(in_features=512, out_features=19)
         self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.relu(self.conv1(x))
-        x = self.relu(self.conv2(x))
-        x = self.max_pool(x)
         x = self.dropout1(x)
+        x = self.relu(self.conv2(x))
+        x = self.dropout2(x)
+        x = self.max_pool(x)
+        x = self.dropout3(x)
 
         x = self.relu(self.conv3(x))
+        x = self.dropout4(x)
         x = self.relu(self.conv4(x))
         x = self.adaptive_max_pool(x)
         x = x.view(-1, 512)
-        x = self.dropout2(x)
+        x = self.dropout5(x)
         x = self.fc1(x)
         x = F.log_softmax(x, dim=1)
         return x
@@ -143,16 +151,31 @@ def test_func(model, device, test_loader):
     return val_acc
 
 
-def predict_fun():
-    pass
+def predict_fun(model, device, pred_loader):
+    res_list = []
+    with torch.no_grad():
+        for idx, (part_pred,) in enumerate(pred_loader):
+            part_pred = part_pred.to(device)
+
+            output = model(part_pred)
+            pred = output.argmax(dim=1)
+            if device.type == 'cuda':
+                pred = pred.cpu()
+            res_list.append(list(pred))
+    return res_list
 
 
 if __name__ == '__main__':
+    from datetime import datetime
+    date_begin = datetime.now().strftime("%Y%m%d_%H%M%S")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     proba_t = np.zeros((7500, 19))
     learning_rate = 0.001
     batch_size = 512
     kfold = StratifiedKFold(n_splits=5, random_state=2020, shuffle=True)
+
+    pred_dataset = data.TensorDataset(test_x.to(device))
+    pred_loader = data.DataLoader(pred_dataset, batch_size=batch_size)
 
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
         x_trn, y_trn, x_val, y_val = train_x[trn_idx], train_y[trn_idx], train_x[val_idx], train_y[val_idx]
@@ -196,55 +219,26 @@ if __name__ == '__main__':
                 if early_stop_init >= early_stop_step:
                     break
 
-        torch.save(model.state_dict(), f"mnist_cnn{fold}.pt")
+        torch.save(model.state_dict(), f"{date_begin}_mnist_cnn{fold}.pt")
+    print(date_begin, datetime.now())
+    # model = MyNet().to(device)
+    # model.load_state_dict(torch.load(f"{date_begin}_mnist_cnn0.pt"))
 
-# certion = nn.CrossEntropyLoss()
-# epochs = 5000
-# kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=2020)
-# for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
-#     x_trn, y_trn, x_val, y_val = train_x[trn_idx], train_y[trn_idx], train_x[val_idx], train_y[val_idx]
-#     # x_trn = torch.from_numpy(np.array(x_trn))
-#     # x_val = torch.from_numpy(np.array(x_val))
-#     # y_trn = torch.from_numpy(np.array(y_trn, dtype='int'))
-#     # y_val = torch.from_numpy(np.array(y_val, dtype='int'))
-#     # print(x_trn.shape)
-#     max_acc = 0
-#     early_stop = 0
-#     SGD = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-#     for epoch in range(1, epochs + 1):
-#         model.train()
-#         SGD.zero_grad()
-#         output = model(x_trn)
-#         loss = certion(output, y_trn)
-#         loss.backward()
-#         SGD.step()
-#
-#         model.eval()
-#         output_ = model(x_val)
-#         output_ = torch.argmax(output_, dim=1)
-#         cnt = sum(output_ == y_val).item()
-#         len_dataset = len(y_val)
-#         acc = cnt / len_dataset * 100
-#         print("Epoch{}: Accu in val_set is {}.".format(epoch, acc))
-#
-# if max_acc < acc:
-#     max_acc = acc
-#     early_stop = 0
-# else:
-#     early_stop += 1
-#     if early_stop >= 50:
-#         break
-
-# a = torch.randn(4, 3, 28, 28)
-# aa = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1)(a)
-# b = nn.MaxPool2d(kernel_size=2)(aa)
-# c = nn.Dropout(0.5)(b)
-# print(a.shape)
-# print(aa.shape)
-# print(b.shape)
-# print(c.shape)
-# cc = c.view([4, 64*14 *14])
-# # cc = c.view([4, 64*14 *14])
-# print('cc',cc.shape)
-# d = nn.Linear(in_features=64*14 *14, out_features=19)(cc)
-# print(d.shape)
+    # def predict_fun(model, device, pred_loader):
+    #     res_list = []
+    #     with torch.no_grad():
+    #         for idx, (part_pred,) in enumerate(pred_loader):
+    #             part_pred = part_pred.to(device)
+    #
+    #             output = model(part_pred)
+    #             pred = output.argmax(dim=1)
+    #             if device.type == 'cuda':
+    #                 pred = pred.cpu()
+    #             res_list.extend(list(np.array(pred)))
+    #     return res_list
+    #
+    #
+    # res_list = predict_fun(model, device, pred_loader)
+    #
+    # sub = pd.read_csv('提交结果示例.csv')
+    # sub.to_csv(f'{date_begin}_submit_cnn4.3.csv', index=False)
