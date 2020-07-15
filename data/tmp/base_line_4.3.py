@@ -167,6 +167,7 @@ def predict_fun(model, device, pred_loader):
 
 if __name__ == '__main__':
     from datetime import datetime
+
     date_begin = datetime.now().strftime("%Y%m%d_%H%M%S")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     proba_t = np.zeros((7500, 19))
