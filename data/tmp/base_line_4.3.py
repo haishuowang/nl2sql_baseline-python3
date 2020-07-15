@@ -113,7 +113,7 @@ class MyNet(nn.Module):
         x = self.fc1(x)
         x = F.log_softmax(x, dim=1)
         return x
-
+ 
 
 def train_func(model, device, train_loader, optimizer, epoch):
     model.train()
