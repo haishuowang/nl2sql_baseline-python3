@@ -80,17 +80,17 @@ class MyNet(nn.Module):
         self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
         self.conv4 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
+        # self.conv5 = nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, padding=1)
         self.max_pool = nn.MaxPool2d(2)
         self.max_pool1 = nn.MaxPool2d(2)
-        # self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
+        self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
 
         self.dropout1 = nn.Dropout(0.2)
         self.dropout2 = nn.Dropout(0.2)
         self.dropout3 = nn.Dropout(0.2)
         self.dropout4 = nn.Dropout(0.2)
         self.dropout5 = nn.Dropout(0.3)
-        self.dropout6 = nn.Dropout(0.5)
-        self.fc0 = nn.Linear(in_features=512 * 15 * 2, out_features=512)
+        self.dropout6 = nn.Dropout(0.4)
         self.fc1 = nn.Linear(in_features=512, out_features=19)
         self.relu = nn.ReLU()
 
@@ -105,11 +105,11 @@ class MyNet(nn.Module):
         x = self.relu(self.conv3(x))
         x = self.dropout4(x)
         x = self.relu(self.conv4(x))
-        x = self.max_pool1(x)
-        x = x.view(-1, 512 * 15 * 2)
         x = self.dropout5(x)
-        x = self.relu(self.fc0(x))
+        x = self.max_pool1(x)
         x = self.dropout6(x)
+        x = self.adaptive_max_pool(x)
+        x = x.view(-1, 512)
         x = self.fc1(x)
         x = F.log_softmax(x, dim=1)
         return x
@@ -194,7 +194,7 @@ if __name__ == '__main__':
         model = MyNet().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-        num_epochs = 500
+        num_epochs = 250
         early_stop_init = 0
         early_stop_step = 20
         max_acc = 0
@@ -211,20 +211,20 @@ if __name__ == '__main__':
                   f'change_lr_init={change_lr_init}')
             if max_acc < val_acc:
                 max_acc = val_acc
-                early_stop_init = 0
-                change_lr_init = 0
+                # early_stop_init = 0
+                # change_lr_init = 0
+                torch.save(model.state_dict(), f"{date_begin}_mnist_cnn{fold}.pt")
+            elif max_acc > 70:
+                if change_lr_con:
+                    change_lr_init += 1
+                    if change_lr_init >= change_lr_step:
+                        lr = lr * change_lr_rate
+                        change_lr_con = False
+            #     else:
+            #         early_stop_init += 1
+            #         if early_stop_init >= early_stop_step:
+            #             break
 
-            elif change_lr_con:
-                change_lr_init += 1
-                if change_lr_init >= change_lr_step:
-                    lr = lr * change_lr_rate
-                    change_lr_con = False
-            else:
-                early_stop_init += 1
-                if early_stop_init >= early_stop_step:
-                    break
-
-        torch.save(model.state_dict(), f"{date_begin}_mnist_cnn{fold}.pt")
     print(date_begin, datetime.now())
 
     proba_t = np.zeros((7500, 19))
@@ -245,6 +245,7 @@ if __name__ == '__main__':
                     res_list.append(output)
             result_tensor = torch.cat(res_list)
             return result_tensor
+
         result_tensor = predict_fun(model, device, pred_loader)
         result_array = np.array(result_tensor)
         proba_t += result_array / 5
@@ -254,3 +255,7 @@ if __name__ == '__main__':
     sub = pd.read_csv('提交结果示例.csv')
     sub.behavior_id = pred_y
     sub.to_csv(f'{date_begin}_submit_cnn4.3.csv', index=False)
+
+
+
+

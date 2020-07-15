@@ -30,7 +30,6 @@ class Net(nn.Module):
         x = x.view(-1, 4 * 4 * 50)  # reshape (5 * 2 * 10), view(5, 20) -> (5 * 20)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        # return x
         return F.log_softmax(x, dim=1)  # log probability
 
 
