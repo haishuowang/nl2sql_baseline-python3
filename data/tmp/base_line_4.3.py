@@ -31,10 +31,10 @@ InteractiveShell.ast_node_interactivity = "all"
 
 
 def fun(data):
-    data['acc_xc'] = data['acc_xg'] - data['acc_x']
-    data['acc_yc'] = data['acc_yg'] - data['acc_y']
-    data['acc_zc'] = data['acc_zg'] - data['acc_z']
-    data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
+    # data['acc_xc'] = data['acc_xg'] - data['acc_x']
+    # data['acc_yc'] = data['acc_yg'] - data['acc_y']
+    # data['acc_zc'] = data['acc_zg'] - data['acc_z']
+    # data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
     data['mod'] = (data.acc_x ** 2 + data.acc_y ** 2 + data.acc_z ** 2) ** .5
     data['modg'] = (data.acc_xg ** 2 + data.acc_yg ** 2 + data.acc_zg ** 2) ** .5
     return data
@@ -81,14 +81,16 @@ class MyNet(nn.Module):
         self.conv3 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
         self.conv4 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
         self.max_pool = nn.MaxPool2d(2)
-        self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
+        self.max_pool1 = nn.MaxPool2d(2)
+        # self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
 
         self.dropout1 = nn.Dropout(0.2)
         self.dropout2 = nn.Dropout(0.2)
         self.dropout3 = nn.Dropout(0.2)
         self.dropout4 = nn.Dropout(0.2)
         self.dropout5 = nn.Dropout(0.3)
-        self.dropout6 = nn.Dropout(0.4)
+        self.dropout6 = nn.Dropout(0.5)
+        self.fc0 = nn.Linear(in_features=512 * 15 * 2, out_features=512)
         self.fc1 = nn.Linear(in_features=512, out_features=19)
         self.relu = nn.ReLU()
 
@@ -103,9 +105,11 @@ class MyNet(nn.Module):
         x = self.relu(self.conv3(x))
         x = self.dropout4(x)
         x = self.relu(self.conv4(x))
-        x = self.adaptive_max_pool(x)
-        x = x.view(-1, 512)
+        x = self.max_pool1(x)
+        x = x.view(-1, 512 * 15 * 2)
         x = self.dropout5(x)
+        x = self.relu(self.fc0(x))
+        x = self.dropout6(x)
         x = self.fc1(x)
         x = F.log_softmax(x, dim=1)
         return x
@@ -222,24 +226,31 @@ if __name__ == '__main__':
 
         torch.save(model.state_dict(), f"{date_begin}_mnist_cnn{fold}.pt")
     print(date_begin, datetime.now())
-    # model = MyNet().to(device)
-    # model.load_state_dict(torch.load(f"{date_begin}_mnist_cnn0.pt"))
 
-    # def predict_fun(model, device, pred_loader):
-    #     res_list = []
-    #     with torch.no_grad():
-    #         for idx, (part_pred,) in enumerate(pred_loader):
-    #             part_pred = part_pred.to(device)
-    #
-    #             output = model(part_pred)
-    #             pred = output.argmax(dim=1)
-    #             if device.type == 'cuda':
-    #                 pred = pred.cpu()
-    #             res_list.extend(list(np.array(pred)))
-    #     return res_list
-    #
-    #
-    # res_list = predict_fun(model, device, pred_loader)
-    #
-    # sub = pd.read_csv('提交结果示例.csv')
-    # sub.to_csv(f'{date_begin}_submit_cnn4.3.csv', index=False)
+    proba_t = np.zeros((7500, 19))
+    for i in range(5):
+        model = MyNet().to(device)
+        model.load_state_dict(torch.load(f"{date_begin}_mnist_cnn{i}.pt"))
+
+        def predict_fun(model, device, pred_loader):
+            res_list = []
+            with torch.no_grad():
+                for idx, (part_pred,) in enumerate(pred_loader):
+                    part_pred = part_pred.to(device)
+
+                    output = model(part_pred)
+                    # pred = output.argmax(dim=1)
+                    if device.type == 'cuda':
+                        output = output.cpu()
+                    res_list.append(output)
+            result_tensor = torch.cat(res_list)
+            return result_tensor
+        result_tensor = predict_fun(model, device, pred_loader)
+        result_array = np.array(result_tensor)
+        proba_t += result_array / 5
+
+    pred_y = np.argmax(proba_t, axis=1)
+
+    sub = pd.read_csv('提交结果示例.csv')
+    sub.behavior_id = pred_y
+    sub.to_csv(f'{date_begin}_submit_cnn4.3.csv', index=False)
