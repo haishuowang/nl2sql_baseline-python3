@@ -35,6 +35,14 @@ def fun(data):
     # data['acc_yc'] = data['acc_yg'] - data['acc_y']
     # data['acc_zc'] = data['acc_zg'] - data['acc_z']
     # data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
+    data['acc_x_std'] = data['acc_x'].rolling(window=10).std().fillna(0)
+    data['acc_y_std'] = data['acc_y'].rolling(window=10).std().fillna(0)
+    data['acc_z_std'] = data['acc_z'].rolling(window=10).std().fillna(0)
+
+    data['acc_xg_std'] = data['acc_xg'].rolling(window=10).std().fillna(0)
+    data['acc_yg_std'] = data['acc_yg'].rolling(window=10).std().fillna(0)
+    data['acc_zg_std'] = data['acc_zg'].rolling(window=10).std().fillna(0)
+
     data['mod'] = (data.acc_x ** 2 + data.acc_y ** 2 + data.acc_z ** 2) ** .5
     data['modg'] = (data.acc_xg ** 2 + data.acc_yg ** 2 + data.acc_zg ** 2) ** .5
     return data
@@ -118,13 +126,44 @@ class MyNet(nn.Module):
 class PaNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=[1, 3], padding=1)
-        # self.max_pool = nn.MaxPool2d()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=5, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=5, padding=1)
+        self.conv3 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
+        self.max_pool1 = nn.MaxPool2d(2)
+        self.max_pool2 = nn.MaxPool2d(2)
+        self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
+
+        self.dropout1 = nn.Dropout(0.2)
+        self.dropout2 = nn.Dropout(0.2)
+        self.dropout3 = nn.Dropout(0.2)
+
+        self.dropout4 = nn.Dropout(0.2)
+        self.dropout5 = nn.Dropout(0.3)
+        self.dropout6 = nn.Dropout(0.4)
+
+        self.fc1 = nn.Linear(in_features=512, out_features=19)
+        self.relu = nn.ReLU()
+
 
     def forward(self, x):
-        x = self.conv1(x)
-        print(x)
-        return x
+        x = self.relu(self.conv1(x))
+        x = self.dropout1(x)
+        x = self.relu(self.conv2(x))
+        x = self.dropout2(x)
+        x = self.max_pool1(x)
+        x = self.dropout3(x)
+
+        x = self.relu(self.conv3(x))
+        x = self.dropout4(x)
+        x = self.relu(self.conv4(x))
+        x = self.dropout5(x)
+        x = self.max_pool2(x)
+        x = self.dropout6(x)
+        x = self.adaptive_max_pool(x)
+        x = x.view(-1, 512)
+        x = self.fc1(x)
+        return F.log_softmax(x, dim=1)
 
 
 def train_func(model, device, train_loader, optimizer, epoch):
@@ -193,6 +232,7 @@ if __name__ == '__main__':
 
     pred_dataset = data.TensorDataset(test_x.to(device))
     pred_loader = data.DataLoader(pred_dataset, batch_size=batch_size)
+    UseNet = MyNet()
 
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
         x_trn, y_trn, x_val, y_val = train_x[trn_idx], train_y[trn_idx], train_x[val_idx], train_y[val_idx]
@@ -203,7 +243,7 @@ if __name__ == '__main__':
         test_loader = data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
         lr = 0.001
-        model = MyNet().to(device)
+        model = UseNet.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
         num_epochs = 250
@@ -241,7 +281,7 @@ if __name__ == '__main__':
 
     proba_t = np.zeros((7500, 19))
     for i in range(5):
-        model = MyNet().to(device)
+        model = UseNet.to(device)
         model.load_state_dict(torch.load(f"{date_begin}_mnist_cnn{i}.pt"))
 
         def predict_fun(model, device, pred_loader):
