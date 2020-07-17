@@ -31,18 +31,10 @@ InteractiveShell.ast_node_interactivity = "all"
 
 
 def fun(data):
-    # data['acc_xc'] = data['acc_xg'] - data['acc_x']
-    # data['acc_yc'] = data['acc_yg'] - data['acc_y']
-    # data['acc_zc'] = data['acc_zg'] - data['acc_z']
-    # data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
-    data['acc_x_std'] = data['acc_x'].rolling(window=10).std().fillna(0)
-    data['acc_y_std'] = data['acc_y'].rolling(window=10).std().fillna(0)
-    data['acc_z_std'] = data['acc_z'].rolling(window=10).std().fillna(0)
-
-    data['acc_xg_std'] = data['acc_xg'].rolling(window=10).std().fillna(0)
-    data['acc_yg_std'] = data['acc_yg'].rolling(window=10).std().fillna(0)
-    data['acc_zg_std'] = data['acc_zg'].rolling(window=10).std().fillna(0)
-
+    data['acc_xc'] = data['acc_xg'] - data['acc_x']
+    data['acc_yc'] = data['acc_yg'] - data['acc_y']
+    data['acc_zc'] = data['acc_zg'] - data['acc_z']
+    data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
     data['mod'] = (data.acc_x ** 2 + data.acc_y ** 2 + data.acc_z ** 2) ** .5
     data['modg'] = (data.acc_xg ** 2 + data.acc_yg ** 2 + data.acc_zg ** 2) ** .5
     return data
@@ -77,7 +69,9 @@ def data_tensor(test, train):
 
 
 train, test, train_y, sub = get_data()
-use_feat = [f for f in train.columns if f not in ['fragment_id', 'time_point', 'behavior_id']]
+use_feat = ['acc_x', 'acc_y', 'acc_z', 'mod',
+            'acc_xg', 'acc_yg', 'acc_zg', 'modg',
+            'acc_xc', 'acc_yc', 'acc_zc', 'G',]
 train_x, test_x = data_tensor(test, train)
 
 
@@ -126,49 +120,42 @@ class MyNet(nn.Module):
 class PaNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=5, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=5, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1)
-        self.max_pool1 = nn.MaxPool2d(2)
-        self.max_pool2 = nn.MaxPool2d(2)
-        self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=[3, 4], stride=[1, 4], padding=[1, 0])
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
+        self.max_pool1 = nn.MaxPool2d([2, 1])
+        self.max_pool2 = nn.MaxPool2d([2, 1])
 
         self.dropout1 = nn.Dropout(0.2)
         self.dropout2 = nn.Dropout(0.2)
-        self.dropout3 = nn.Dropout(0.2)
 
-        self.dropout4 = nn.Dropout(0.2)
-        self.dropout5 = nn.Dropout(0.3)
-        self.dropout6 = nn.Dropout(0.4)
-
+        self.fc0 = nn.Linear(in_features=512*15*3, out_features=512)
         self.fc1 = nn.Linear(in_features=512, out_features=19)
         self.relu = nn.ReLU()
 
-
     def forward(self, x):
         x = self.relu(self.conv1(x))
-        x = self.dropout1(x)
         x = self.relu(self.conv2(x))
-        x = self.dropout2(x)
+        x = self.dropout1(x)
         x = self.max_pool1(x)
-        x = self.dropout3(x)
+
 
         x = self.relu(self.conv3(x))
-        x = self.dropout4(x)
         x = self.relu(self.conv4(x))
-        x = self.dropout5(x)
+        x = self.dropout2(x)
         x = self.max_pool2(x)
-        x = self.dropout6(x)
-        x = self.adaptive_max_pool(x)
-        x = x.view(-1, 512)
+
+        x = x.view(-1, 512*15*3)
+        x = self.relu(self.fc0(x))
         x = self.fc1(x)
         return F.log_softmax(x, dim=1)
 
 
 def train_func(model, device, train_loader, optimizer, epoch):
     model.train()
-
+    train_loss = 0.
+    train_acc = 0.
     for idx, (part_train, target) in enumerate(train_loader):
         data, target = part_train.to(device), target.to(device)
 
@@ -177,33 +164,37 @@ def train_func(model, device, train_loader, optimizer, epoch):
         pred = output.argmax(dim=1)
         part_correct = pred.eq(target.view_as(pred)).sum().item()
         acc = part_correct / len(target)
+        train_acc += acc
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        train_loss+=loss.item()
         # if idx % 100 == 0:
         print("Train Epoch: {}, iteration: {}, Train loss: {}, Acc={}".format(
             epoch, idx, round(loss.item(), 4), round(acc * 100, 2)))
-
+    train_loss /= len(train_loader.dataset)
+    train_acc /= len(train_loader.dataset) * 100
+    return train_acc, train_loss
 
 def test_func(model, device, test_loader):
     model.eval()
-    total_loss = 0.
+    test_loss = 0.
     correct = 0.
     with torch.no_grad():
         for idx, (part_test, target) in enumerate(test_loader):
             part_test, target = part_test.to(device), target.to(device)
 
             output = model(part_test)  # batch_size * 10
-            total_loss += F.nll_loss(output, target, reduction="sum").item()
+            test_loss += F.nll_loss(output, target, reduction="sum").item()
             pred = output.argmax(dim=1)  # batch_size * 1
             correct += pred.eq(target.view_as(pred)).sum().item()
 
-    total_loss /= len(test_loader.dataset)
-    val_acc = correct / len(test_loader.dataset) * 100.
+    test_loss /= len(test_loader.dataset)
+    test_acc = correct / len(test_loader.dataset) * 100.
     print('*******************************')
-    print("test loss: {}, val_acc: {}".format(total_loss, val_acc))
+    print("test loss: {}, val_acc: {}".format(test_loss, test_acc))
     print('*******************************')
-    return val_acc
+    return test_acc, test_loss
 
 
 def predict_fun(model, device, pred_loader):
@@ -232,8 +223,6 @@ if __name__ == '__main__':
 
     pred_dataset = data.TensorDataset(test_x.to(device))
     pred_loader = data.DataLoader(pred_dataset, batch_size=batch_size)
-    UseNet = MyNet()
-
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
         x_trn, y_trn, x_val, y_val = train_x[trn_idx], train_y[trn_idx], train_x[val_idx], train_y[val_idx]
         train_dataset = data.TensorDataset(x_trn.to(device), y_trn.to(device))
@@ -243,10 +232,10 @@ if __name__ == '__main__':
         test_loader = data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
         lr = 0.001
-        model = UseNet.to(device)
+        model = PaNet().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-        num_epochs = 250
+        num_epochs = 100
         early_stop_init = 0
         early_stop_step = 20
         max_acc = 0
@@ -256,13 +245,25 @@ if __name__ == '__main__':
         change_lr_init = 0
         change_lr_step = 16
 
+        train_loss_list = []
+        test_loss_list = []
+
+        train_acc_list = []
+        test_acc_list = []
+
         for epoch in range(num_epochs):
-            train_func(model, device, train_loader, optimizer, epoch)
-            val_acc = test_func(model, device, test_loader)
+            train_acc, train_loss = train_func(model, device, train_loader, optimizer, epoch)
+            test_acc, test_loss = test_func(model, device, test_loader)
+
+            train_loss_list.append(train_loss)
+            test_loss_list.append(test_loss)
+            train_acc_list.append(train_acc)
+            test_acc_list.append(test_acc)
+
             print(f'max_val={max_acc}， early_stop_init={early_stop_init}, '
                   f'change_lr_init={change_lr_init}')
-            if max_acc < val_acc:
-                max_acc = val_acc
+            if max_acc < test_acc:
+                max_acc = test_acc
                 # early_stop_init = 0
                 # change_lr_init = 0
                 torch.save(model.state_dict(), f"{date_begin}_mnist_cnn{fold}.pt")
@@ -276,12 +277,21 @@ if __name__ == '__main__':
             #         early_stop_init += 1
             #         if early_stop_init >= early_stop_step:
             #             break
+        plt.figure(figsize=[12, 10])
+        plt.plot(train_loss_list)
+        plt.plot(test_loss_list)
+        plt.savefig(f'{date_begin}_loss{fold}.png')
+        plt.figure(figsize=[12, 10])
+        plt.plot(train_acc_list)
+        plt.plot(test_acc_list)
+        plt.savefig(f'{date_begin}_acc{fold}.png')
+
 
     print(date_begin, datetime.now())
 
     proba_t = np.zeros((7500, 19))
     for i in range(5):
-        model = UseNet.to(device)
+        model = PaNet().to(device)
         model.load_state_dict(torch.load(f"{date_begin}_mnist_cnn{i}.pt"))
 
         def predict_fun(model, device, pred_loader):
