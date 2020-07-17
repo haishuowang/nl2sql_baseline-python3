@@ -124,30 +124,39 @@ class PaNet(nn.Module):
         self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
         self.conv4 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
-        self.max_pool1 = nn.MaxPool2d([2, 1])
-        self.max_pool2 = nn.MaxPool2d([2, 1])
+        self.dropout1 = nn.Dropout(0.2)
+        self.dropout2 = nn.Dropout(0.2)
+        self.dropout3 = nn.Dropout(0.2)
+        self.dropout4 = nn.Dropout(0.2)
+        self.dropout5 = nn.Dropout(0.3)
+        self.dropout6 = nn.Dropout(0.4)
+
+        self.max_pool1 = nn.MaxPool2d(2)
+
+        self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
 
         self.dropout1 = nn.Dropout(0.2)
         self.dropout2 = nn.Dropout(0.2)
 
-        self.fc0 = nn.Linear(in_features=512*15*3, out_features=512)
         self.fc1 = nn.Linear(in_features=512, out_features=19)
         self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.relu(self.conv1(x))
-        x = self.relu(self.conv2(x))
         x = self.dropout1(x)
+        x = self.relu(self.conv2(x))
+        x = self.dropout2(x)
         x = self.max_pool1(x)
-
+        x = self.dropout3(x)
 
         x = self.relu(self.conv3(x))
+        x = self.dropout4(x)
         x = self.relu(self.conv4(x))
-        x = self.dropout2(x)
-        x = self.max_pool2(x)
+        x = self.dropout5(x)
 
-        x = x.view(-1, 512*15*3)
-        x = self.relu(self.fc0(x))
+        x = self.adaptive_max_pool(x)
+        x = self.dropout6(x)
+        x = x.view(-1, 512)
         x = self.fc1(x)
         return F.log_softmax(x, dim=1)
 
@@ -155,7 +164,7 @@ class PaNet(nn.Module):
 def train_func(model, device, train_loader, optimizer, epoch):
     model.train()
     train_loss = 0.
-    train_acc = 0.
+    train_correct = 0.
     for idx, (part_train, target) in enumerate(train_loader):
         data, target = part_train.to(device), target.to(device)
 
@@ -164,7 +173,7 @@ def train_func(model, device, train_loader, optimizer, epoch):
         pred = output.argmax(dim=1)
         part_correct = pred.eq(target.view_as(pred)).sum().item()
         acc = part_correct / len(target)
-        train_acc += acc
+        train_correct += part_correct
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -172,14 +181,15 @@ def train_func(model, device, train_loader, optimizer, epoch):
         # if idx % 100 == 0:
         print("Train Epoch: {}, iteration: {}, Train loss: {}, Acc={}".format(
             epoch, idx, round(loss.item(), 4), round(acc * 100, 2)))
-    train_loss /= len(train_loader.dataset)
-    train_acc /= len(train_loader.dataset) * 100
+    train_loss /= len(train_loader)
+    train_acc = train_correct/len(train_loader.dataset) * 100
     return train_acc, train_loss
+
 
 def test_func(model, device, test_loader):
     model.eval()
     test_loss = 0.
-    correct = 0.
+    test_correct = 0.
     with torch.no_grad():
         for idx, (part_test, target) in enumerate(test_loader):
             part_test, target = part_test.to(device), target.to(device)
@@ -187,10 +197,10 @@ def test_func(model, device, test_loader):
             output = model(part_test)  # batch_size * 10
             test_loss += F.nll_loss(output, target, reduction="sum").item()
             pred = output.argmax(dim=1)  # batch_size * 1
-            correct += pred.eq(target.view_as(pred)).sum().item()
+            test_correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
-    test_acc = correct / len(test_loader.dataset) * 100.
+    test_acc = test_correct / len(test_loader.dataset) * 100.
     print('*******************************')
     print("test loss: {}, val_acc: {}".format(test_loss, test_acc))
     print('*******************************')
@@ -235,7 +245,7 @@ if __name__ == '__main__':
         model = PaNet().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-        num_epochs = 100
+        num_epochs = 300
         early_stop_init = 0
         early_stop_step = 20
         max_acc = 0
@@ -254,7 +264,8 @@ if __name__ == '__main__':
         for epoch in range(num_epochs):
             train_acc, train_loss = train_func(model, device, train_loader, optimizer, epoch)
             test_acc, test_loss = test_func(model, device, test_loader)
-
+            print(train_acc, train_loss)
+            print(test_acc, test_loss)
             train_loss_list.append(train_loss)
             test_loss_list.append(test_loss)
             train_acc_list.append(train_acc)
