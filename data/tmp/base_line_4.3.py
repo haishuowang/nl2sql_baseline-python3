@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torch.utils import data
 import random
+from multiprocessing import Pool
 
 USE_CUDA = torch.cuda.is_available()
 
@@ -34,9 +35,47 @@ def fun(data):
     data['acc_xc'] = data['acc_xg'] - data['acc_x']
     data['acc_yc'] = data['acc_yg'] - data['acc_y']
     data['acc_zc'] = data['acc_zg'] - data['acc_z']
+
     data['G'] = (data['acc_xc'] ** 2 + data['acc_yc'] ** 2 + data['acc_zc'] ** 2) ** 0.5
     data['mod'] = (data.acc_x ** 2 + data.acc_y ** 2 + data.acc_z ** 2) ** .5
     data['modg'] = (data.acc_xg ** 2 + data.acc_yg ** 2 + data.acc_zg ** 2) ** .5
+
+    # data['acc_xg_fft_abs'] = np.nan
+    # data['acc_yg_fft_abs'] = np.nan
+    # data['acc_zg_fft_abs'] = np.nan
+    # data['acc_x_fft_abs'] = np.nan
+    # data['acc_y_fft_abs'] = np.nan
+    # data['acc_z_fft_abs'] = np.nan
+    # data['acc_xg_fft_angle'] = np.nan
+    # data['acc_yg_fft_angle'] = np.nan
+    # data['acc_zg_fft_angle'] = np.nan
+    # data['acc_x_fft_angle'] = np.nan
+    # data['acc_y_fft_angle'] = np.nan
+    # data['acc_z_fft_angle'] = np.nan
+
+    # for id, part_data in tqdm(data.groupby('fragment_id')):
+    #     part_data_len = len(part_data)
+    #     acc_xg_fft = np.fft.fft(part_data['acc_xg'])
+    #     acc_yg_fft = np.fft.fft(part_data['acc_yg'])
+    #     acc_zg_fft = np.fft.fft(part_data['acc_zg'])
+    #     acc_x_fft = np.fft.fft(part_data['acc_x'])
+    #     acc_y_fft = np.fft.fft(part_data['acc_y'])
+    #     acc_z_fft = np.fft.fft(part_data['acc_z'])
+    #
+    #     data['acc_xg_fft_abs'].loc[part_data.index] = np.abs(acc_xg_fft) / part_data_len
+    #     data['acc_yg_fft_abs'].loc[part_data.index] = np.abs(acc_yg_fft) / part_data_len
+    #     data['acc_zg_fft_abs'].loc[part_data.index] = np.abs(acc_zg_fft) / part_data_len
+    #     data['acc_x_fft_abs'].loc[part_data.index] = np.abs(acc_x_fft) / part_data_len
+    #     data['acc_y_fft_abs'].loc[part_data.index] = np.abs(acc_y_fft) / part_data_len
+    #     data['acc_z_fft_abs'].loc[part_data.index] = np.abs(acc_z_fft) / part_data_len
+    #
+    #     data['acc_xg_fft_angle'].loc[part_data.index] = np.angle(acc_xg_fft)
+    #     data['acc_yg_fft_angle'].loc[part_data.index] = np.angle(acc_yg_fft)
+    #     data['acc_zg_fft_angle'].loc[part_data.index] = np.angle(acc_zg_fft)
+    #     data['acc_x_fft_angle'].loc[part_data.index] = np.angle(acc_x_fft)
+    #     data['acc_y_fft_angle'].loc[part_data.index] = np.angle(acc_y_fft)
+    #     data['acc_z_fft_angle'].loc[part_data.index] = np.angle(acc_z_fft)
+
     return data
 
 
@@ -56,23 +95,40 @@ def data_tensor(test, train):
     train_x = torch.zeros((7292, 1, 60, len(use_feat)))
     test_x = torch.zeros((7500, 1, 60, len(use_feat)))
 
-    for i in tqdm(range(7292)):
+    def part_data_tensor(train, i):
         tmp = train[train.fragment_id == i][:60]
+        # part_data_len = len(tmp)
+        # acc_xg_fft = np.fft.fft(tmp['acc_xg'])
+        # acc_yg_fft = np.fft.fft(tmp['acc_yg'])
+        # acc_zg_fft = np.fft.fft(tmp['acc_zg'])
+        # acc_x_fft = np.fft.fft(tmp['acc_x'])
+        # acc_y_fft = np.fft.fft(tmp['acc_y'])
+        # acc_z_fft = np.fft.fft(tmp['acc_z'])
+        #
+        # tmp['acc_xg_fft_abs'] = np.abs(acc_xg_fft) / part_data_len
+        # tmp['acc_yg_fft_abs'] = np.abs(acc_yg_fft) / part_data_len
+        # tmp['acc_zg_fft_abs'] = np.abs(acc_zg_fft) / part_data_len
+        # tmp['acc_x_fft_abs'] = np.abs(acc_x_fft) / part_data_len
+        # tmp['acc_y_fft_abs'] = np.abs(acc_y_fft) / part_data_len
+        # tmp['acc_z_fft_abs'] = np.abs(acc_z_fft) / part_data_len
+        # tmp['acc_xg_fft_angle'] = np.angle(acc_xg_fft)
+        # tmp['acc_yg_fft_angle'] = np.angle(acc_yg_fft)
+        # tmp['acc_zg_fft_angle'] = np.angle(acc_zg_fft)
+        # tmp['acc_x_fft_angle'] = np.angle(acc_x_fft)
+        # tmp['acc_y_fft_angle'] = np.angle(acc_y_fft)
+        # tmp['acc_z_fft_angle'] = np.angle(acc_z_fft)
+
         data, label = resample(tmp[use_feat], 60, np.array(tmp.time_point))
+        return data
+
+    for i in tqdm(range(7292)):
+        data = part_data_tensor(train, i)
         train_x[i, 0, :, :] = torch.from_numpy(data)
 
     for i in tqdm(range(7500)):
-        tmp = test[test.fragment_id == i][:60]
-        data, label = resample(tmp[use_feat], 60, np.array(tmp.time_point))
+        data = part_data_tensor(test, i)
         test_x[i, 0, :, :] = torch.from_numpy(data)
     return train_x, test_x
-
-
-train, test, train_y, sub = get_data()
-use_feat = ['acc_x', 'acc_y', 'acc_z', 'mod',
-            'acc_xg', 'acc_yg', 'acc_zg', 'modg',
-            'acc_xc', 'acc_yc', 'acc_zc', 'G',]
-train_x, test_x = data_tensor(test, train)
 
 
 class MyNet(nn.Module):
@@ -120,43 +176,40 @@ class MyNet(nn.Module):
 class PaNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=[3, 4], stride=[1, 4], padding=[1, 0])
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=[5, 1], padding=0)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=[5, 1], padding=0)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=5, padding=1)
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        # self.conv5 = nn.Conv2d(256, 512, kernel_size=3, padding=0)
+        # self.conv4 = nn.Conv2d(64, 128, kernel_size=[3, 1], padding=0)
         self.dropout1 = nn.Dropout(0.2)
-        self.dropout2 = nn.Dropout(0.2)
-        self.dropout3 = nn.Dropout(0.2)
-        self.dropout4 = nn.Dropout(0.2)
-        self.dropout5 = nn.Dropout(0.3)
-        self.dropout6 = nn.Dropout(0.4)
-
-        self.max_pool1 = nn.MaxPool2d(2)
-
-        self.adaptive_max_pool = nn.AdaptiveMaxPool2d(1)
-
-        self.dropout1 = nn.Dropout(0.2)
-        self.dropout2 = nn.Dropout(0.2)
-
-        self.fc1 = nn.Linear(in_features=512, out_features=19)
-        self.relu = nn.ReLU()
+        self.dropout2 = nn.Dropout(0.4)
+        self.avg_pool1 = nn.AvgPool2d([2, 1])
+        self.avg_pool2 = nn.AvgPool2d([2, 1])
+        self.avg_pool3 = nn.AvgPool2d(2)
+        # self.max_pool1 = nn.MaxPool2d([2, 1])
+        # self.max_pool2 = nn.MaxPool2d([2, 1])
+        # self.max_pool3 = nn.MaxPool2d(2)
+        self.adaptive_max_pool = nn.AdaptiveMaxPool2d([1, 11])
+        self.bn = nn.BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True)
+        self.fc1 = nn.Linear(in_features=256 * 11, out_features=19)
 
     def forward(self, x):
-        x = self.relu(self.conv1(x))
-        x = self.dropout1(x)
-        x = self.relu(self.conv2(x))
-        x = self.dropout2(x)
-        x = self.max_pool1(x)
-        x = self.dropout3(x)
-
-        x = self.relu(self.conv3(x))
-        x = self.dropout4(x)
-        x = self.relu(self.conv4(x))
-        x = self.dropout5(x)
-
+        x = F.tanh(self.conv1(x))
+        x = F.dropout(x, p=0.2)
+        x = self.avg_pool1(x)
+        x = F.tanh(self.conv2(x))
+        x = F.dropout(x, p=0.2)
+        x = self.avg_pool2(x)
+        x = F.tanh(self.conv3(x))
+        x = F.tanh(self.conv4(x))
+        x = F.dropout(x, p=0.4)
+        x = self.avg_pool3(x)
+        x = F.tanh(self.bn(x))
         x = self.adaptive_max_pool(x)
-        x = self.dropout6(x)
-        x = x.view(-1, 512)
+        x = x.view(-1, 256 * 11)
+        x = F.dropout(x, p=0.5)
+        # print(x.shape)
         x = self.fc1(x)
         return F.log_softmax(x, dim=1)
 
@@ -177,12 +230,12 @@ def train_func(model, device, train_loader, optimizer, epoch):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        train_loss+=loss.item()
+        train_loss += loss.item()
         # if idx % 100 == 0:
         print("Train Epoch: {}, iteration: {}, Train loss: {}, Acc={}".format(
             epoch, idx, round(loss.item(), 4), round(acc * 100, 2)))
     train_loss /= len(train_loader)
-    train_acc = train_correct/len(train_loader.dataset) * 100
+    train_acc = train_correct / len(train_loader.dataset) * 100
     return train_acc, train_loss
 
 
@@ -221,18 +274,10 @@ def predict_fun(model, device, pred_loader):
     return res_list
 
 
-if __name__ == '__main__':
-    from datetime import datetime
-
-    date_begin = datetime.now().strftime("%Y%m%d_%H%M%S")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    proba_t = np.zeros((7500, 19))
-    learning_rate = 0.001
-    batch_size = 512
+def get_train_model(date_begin, device):
+    lr = 0.001
+    batch_size = 128
     kfold = StratifiedKFold(n_splits=5, random_state=2020, shuffle=True)
-
-    pred_dataset = data.TensorDataset(test_x.to(device))
-    pred_loader = data.DataLoader(pred_dataset, batch_size=batch_size)
     for fold, (trn_idx, val_idx) in enumerate(kfold.split(train_x, train_y)):
         x_trn, y_trn, x_val, y_val = train_x[trn_idx], train_y[trn_idx], train_x[val_idx], train_y[val_idx]
         train_dataset = data.TensorDataset(x_trn.to(device), y_trn.to(device))
@@ -241,11 +286,10 @@ if __name__ == '__main__':
         test_dataset = data.TensorDataset(x_val.to(device), y_val.to(device))
         test_loader = data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
-        lr = 0.001
-        model = PaNet().to(device)
+        model = MyNet().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-        num_epochs = 300
+        num_epochs = 150
         early_stop_init = 0
         early_stop_step = 20
         max_acc = 0
@@ -298,11 +342,10 @@ if __name__ == '__main__':
         plt.savefig(f'{date_begin}_acc{fold}.png')
 
 
-    print(date_begin, datetime.now())
-
+def get_predict_file(pred_loader, date_begin, device):
     proba_t = np.zeros((7500, 19))
     for i in range(5):
-        model = PaNet().to(device)
+        model = MyNet().to(device)
         model.load_state_dict(torch.load(f"{date_begin}_mnist_cnn{i}.pt"))
 
         def predict_fun(model, device, pred_loader):
@@ -319,7 +362,6 @@ if __name__ == '__main__':
             result_tensor = torch.cat(res_list)
             return result_tensor
 
-
         result_tensor = predict_fun(model, device, pred_loader)
         result_array = np.array(result_tensor)
         proba_t += result_array / 5
@@ -329,3 +371,38 @@ if __name__ == '__main__':
     sub = pd.read_csv('提交结果示例.csv')
     sub.behavior_id = pred_y
     sub.to_csv(f'{date_begin}_submit_cnn4.3.csv', index=False)
+
+
+if __name__ == '__main__':
+    from datetime import datetime
+
+    # train, test, train_y, sub = get_data()
+    use_feat = ['acc_x', 'acc_y', 'acc_z', 'mod',
+                'acc_xg', 'acc_yg', 'acc_zg', 'modg',
+                'acc_xc', 'acc_yc', 'acc_zc', 'G',
+                ]
+    # add_feat = [
+    #     'acc_xg_fft_abs', 'acc_yg_fft_abs', 'acc_zg_fft_abs',
+    #     'acc_x_fft_abs', 'acc_y_fft_abs', 'acc_z_fft_abs',
+    #     'acc_xg_fft_angle', 'acc_yg_fft_angle', 'acc_zg_fft_angle',
+    #     'acc_x_fft_angle', 'acc_y_fft_angle', 'acc_z_fft_angle'
+    # ]
+    # use_feat = use_feat + add_feat
+    # train_x, test_x = data_tensor(test, train)
+    # pd.to_pickle(train_x, 'train_x.pkl')
+    # pd.to_pickle(test_x, 'test_x.pkl')
+    # pd.to_pickle(train_y, 'train_y.pkl')
+
+    train_x = pd.read_pickle('train_x.pkl')
+    test_x = pd.read_pickle('test_x.pkl')
+    train_y = pd.read_pickle('train_y.pkl')
+
+    date_begin = datetime.now().strftime("%Y%m%d_%H%M%S")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    get_train_model(date_begin, device)
+
+    print(date_begin, datetime.now())
+    pred_dataset = data.TensorDataset(test_x.to(device))
+    pred_loader = data.DataLoader(pred_dataset, batch_size=512)
+    get_predict_file(pred_loader, date_begin, device)
